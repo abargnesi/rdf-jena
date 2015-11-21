@@ -1,10 +1,13 @@
 package com.github.rdf_jena;
 
 import org.apache.jena.query.Dataset;
+import org.apache.jena.rdf.model.Statement;
+import org.apache.jena.rdf.model.StmtIterator;
 import org.apache.jena.tdb.TDBFactory;
 import org.jruby.*;
 import org.jruby.anno.JRubyClass;
 import org.jruby.anno.JRubyMethod;
+import org.jruby.runtime.Block;
 import org.jruby.runtime.ObjectAllocator;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
@@ -51,5 +54,17 @@ public class Repository extends RubyObject {
     public RubyFixnum count(ThreadContext ctx) {
         long size = dataset.getDefaultModel().size();
         return newFixnum(ctx.runtime, size);
+    }
+
+    @JRubyMethod(name = "each_statement")
+    public IRubyObject iterateStatements(ThreadContext ctx, Block block) {
+        if (block != Block.NULL_BLOCK) {
+            StmtIterator statements = dataset.getDefaultModel().listStatements();
+            while (statements.hasNext()) {
+                Statement statement = statements.nextStatement();
+                block.call(ctx, RubyString.newString(ctx.runtime, statement.toString()));
+            }
+        }
+        return ctx.nil;
     }
 }
