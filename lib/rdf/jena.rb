@@ -1,7 +1,5 @@
-require_relative 'jena/version'
-
-# Load JRuby-exposed objects for rdf-jena.
+# Loads Repository within the RDF::Jena module.
 require_relative 'jena/jars/rdf-jena-1.0.0.jar'
-require          'com/github/rdf_jena/RDFJena'
+require          'com/github/rdf_jena/JenaRepository'
 
-require_relative 'jena/jena_storage'
+require_relative 'jena/version'

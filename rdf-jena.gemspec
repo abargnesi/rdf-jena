@@ -2,7 +2,7 @@ require './lib/rdf/jena/version'
 
 Gem::Specification.new do |spec|
   spec.name                     = 'rdf-jena'
-  spec.version                  = RDF::Jena::VERSION
+  spec.version                  = RDF::Jena::Version
   spec.summary                  = '''
                                     RDF.rb storage implementation for Apache Jena
                                   '''.gsub(%r{^\s+}, ' ').gsub(%r{\n}, '')

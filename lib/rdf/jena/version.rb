@@ -1,9 +1,9 @@
 module RDF::Jena
 
-	module VERSION
-    VERSION_FILE = File.join(File.expand_path(File.dirname(__FILE__)), "..", "..", "VERSION")
-    MAJOR, MINOR, TINY, EXTRA = File.read(VERSION_FILE).chomp.split(".")
+  module Version
 
+    VERSION_FILE = File.join(File.expand_path(File.dirname(__FILE__)), '..', '..', '..', 'VERSION')
+    MAJOR, MINOR, TINY, EXTRA = File.read(VERSION_FILE).chomp.split('.')
     STRING = [MAJOR, MINOR, TINY, EXTRA].compact.join('.')
 
     # Returns version string.
