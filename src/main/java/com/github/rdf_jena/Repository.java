@@ -38,7 +38,7 @@ public class Repository extends RubyObject {
     public Repository(Ruby runtime, RubyClass metaclass) {
         super(runtime, metaclass);
 
-        RubyModule rdfModule    = runtime.getModule("RDF");
+        RubyModule rdfModule = runtime.getModule("RDF");
         if (rdfModule == null) {
             throw runtime.newRaiseException(runtime.getClass("RuntimeError"), "RDF");
         }
@@ -85,8 +85,10 @@ public class Repository extends RubyObject {
                 Statement statement = statements.nextStatement();
                 block.call(ctx, convertStatement(ctx, statement));
             }
+            return ctx.nil;
+        } else {
+            return this.callMethod(ctx, "enum_statement");
         }
-        return ctx.nil;
     }
 
     private IRubyObject convertStatement(ThreadContext ctx, Statement statement) {
