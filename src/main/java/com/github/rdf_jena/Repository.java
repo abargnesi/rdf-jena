@@ -73,8 +73,38 @@ public class Repository extends RubyObject {
 
     @JRubyMethod(name = "has_statement?", required = 1)
     public RubyBoolean hasStatement(ThreadContext ctx, IRubyObject rdfStatement) {
+        if (rdfStatement == null) {
+            return newBoolean(ctx.runtime, false);
+        }
+
         Model model = dataset.getDefaultModel();
         Statement statement = convertRDFStatement(ctx, rdfStatement, model);
         return newBoolean(ctx.runtime, model.contains(statement));
     }
+
+    @JRubyMethod(name = "insert_statement", required = 1)
+    public IRubyObject insertStatement(ThreadContext ctx, IRubyObject rdfStatement) {
+        if (rdfStatement == null) {
+            return ctx.nil;
+        }
+
+        Model model = dataset.getDefaultModel();
+        Statement statement = convertRDFStatement(ctx, rdfStatement, model);
+        if (!model.contains(statement)) {
+            model.begin();
+            model.add(statement);
+            model.commit();
+        }
+
+        return ctx.nil;
+    }
+
+    // TODO: Implement delete_statement
+    // TODO: Implement clear_statements
+
+    // TODO: Implement graph_names
+    // TODO: Implement has_graph?
+    // TODO: Implement each_graph
+
+    // TODO: Implement insert_graph
 }
