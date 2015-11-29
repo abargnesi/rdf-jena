@@ -11,6 +11,7 @@ import org.jruby.runtime.ObjectAllocator;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 
+import static com.github.rdf_jena.JenaConverters.convertRDFStatement;
 import static com.github.rdf_jena.RubyRDFConverters.convertStatement;
 import static org.jruby.RubyBoolean.newBoolean;
 import static org.jruby.RubyFixnum.newFixnum;
@@ -70,4 +71,10 @@ public class Repository extends RubyObject {
         }
     }
 
+    @JRubyMethod(name = "has_statement?", required = 1)
+    public RubyBoolean hasStatement(ThreadContext ctx, IRubyObject rdfStatement) {
+        Model model = dataset.getDefaultModel();
+        Statement statement = convertRDFStatement(ctx, rdfStatement, model);
+        return newBoolean(ctx.runtime, model.contains(statement));
+    }
 }
