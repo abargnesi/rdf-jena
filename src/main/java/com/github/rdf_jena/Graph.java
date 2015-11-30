@@ -1,5 +1,8 @@
 package com.github.rdf_jena;
 
+import org.apache.jena.query.Dataset;
+import org.apache.jena.query.ReadWrite;
+import org.apache.jena.rdf.model.Model;
 import org.jruby.*;
 import org.jruby.anno.JRubyClass;
 import org.jruby.anno.JRubyMethod;
@@ -8,32 +11,42 @@ import org.jruby.runtime.ObjectAllocator;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 
+import static com.github.rdf_jena.TransactionUtil.executeInTransaction;
+
 @JRubyClass(name = "Graph")
 public class Graph extends RubyObject {
 
     public static ObjectAllocator Allocator = Graph::new;
 
+    // ruby state
     protected RubyString graphName;
+
+    // java state
+    protected Repository repository;
     protected RepositoryModel repositoryModel;
 
     public Graph(Ruby runtime, RubyClass metaclass) {
         super(runtime, metaclass);
     }
 
-    // Java methods
-
-    public void setRepositoryModel(RepositoryModel repositoryModel) {
-        this.repositoryModel = repositoryModel;
-    }
-
     // Ruby methods
-
-    @JRubyMethod(name = "initialize", required = 1)
+    @JRubyMethod(name = "initialize", required = 2)
     public IRubyObject initialize(
             ThreadContext context,
-            IRubyObject graphName
+            IRubyObject graphName,
+            IRubyObject repository
     ) {
-        this.graphName = graphName.asString();
+        this.graphName       = graphName.asString();
+        this.repository      = (Repository) repository.toJava(Repository.class);
+
+        // Get/Create named model from the provided dataset.
+        Dataset ds = this.repository.dataset;
+
+        Model model = executeInTransaction(ds, ReadWrite.READ, t -> ds.getNamedModel(graphName.asJavaString()));
+
+        // Set up RepositoryModel using model/dataset.
+        this.repositoryModel = new RepositoryModel(this, model, ds);
+
         return context.nil;
     }
 
