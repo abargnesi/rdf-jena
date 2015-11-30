@@ -111,7 +111,12 @@ public class Repository extends RubyObject {
         return ctx.nil;
     }
 
-    // TODO: Implement clear_statements
+    @JRubyMethod(name = "clear_statements")
+    public IRubyObject clearStatements(ThreadContext ctx) {
+        dataset.getDefaultModel().removeAll();
+
+        return ctx.nil;
+    }
 
     // TODO: Implement graph_names
     // TODO: Implement has_graph?
