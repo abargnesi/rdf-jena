@@ -15,4 +15,13 @@ module RDF::Jena
     include RDF::Durable
     include RDF::Queryable
   end
+
+  class Graph
+    include RDF::Value
+    include RDF::Countable
+    include RDF::Durable
+    include RDF::Enumerable
+    include RDF::Queryable
+    include RDF::Mutable
+  end
 end

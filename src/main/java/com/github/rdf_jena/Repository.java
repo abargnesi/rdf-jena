@@ -11,10 +11,9 @@ import org.jruby.runtime.ObjectAllocator;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 
-import static com.github.rdf_jena.JenaConverters.convertRDFStatement;
-import static com.github.rdf_jena.RubyRDFConverters.convertStatement;
-import static org.jruby.RubyBoolean.newBoolean;
-import static org.jruby.RubyFixnum.newFixnum;
+import java.util.Iterator;
+
+import static org.jruby.RubyString.newString;
 
 @JRubyClass(name = "Repository")
 public class Repository extends RubyObject {
@@ -25,7 +24,8 @@ public class Repository extends RubyObject {
      * Jena {@link Dataset} backed by a TDB database. This state is should be
      * used as final within this Ruby Object.
      */
-    public Dataset dataset;
+    protected Dataset         dataset;
+    protected RepositoryModel repositoryModel;
 
     public Repository(Ruby runtime, RubyClass metaclass) {
         super(runtime, metaclass);
@@ -36,91 +36,102 @@ public class Repository extends RubyObject {
             ThreadContext context,
             IRubyObject datasetDirectory
     ) {
-        dataset = TDBFactory.createDataset(datasetDirectory.asJavaString());
+        dataset         = TDBFactory.createDataset(datasetDirectory.asJavaString());
+        repositoryModel = new RepositoryModel(this, dataset.getDefaultModel());
         return context.nil;
     }
 
+    /**
+     * Delegated. See {@link RepositoryModel#isDurable(ThreadContext)}.
+     */
     @JRubyMethod(name = "durable?")
     public RubyBoolean isDurable(ThreadContext ctx) {
-        return newBoolean(ctx.runtime, true);
+        return repositoryModel.isDurable(ctx);
     }
 
+    /**
+     * Delegated. See {@link RepositoryModel#isEmpty(ThreadContext)}.
+     */
     @JRubyMethod(name = "empty?")
     public RubyBoolean isEmpty(ThreadContext ctx) {
-        boolean empty = dataset.getDefaultModel().isEmpty();
-        return newBoolean(ctx.runtime, empty);
+        return repositoryModel.isEmpty(ctx);
     }
 
+    /**
+     * Delegated. See {@link RepositoryModel#count(ThreadContext)}.
+     */
     @JRubyMethod(name = "count", alias = {"size"})
     public RubyFixnum count(ThreadContext ctx) {
-        long size = dataset.getDefaultModel().size();
-        return newFixnum(ctx.runtime, size);
+        return repositoryModel.count(ctx);
     }
 
+    /**
+     * Delegated. See {@link RepositoryModel#iterateStatements(ThreadContext, Block)}.
+     */
     @JRubyMethod(name = "each_statement")
     public IRubyObject iterateStatements(ThreadContext ctx, Block block) {
+        return repositoryModel.iterateStatements(ctx, block);
+    }
+
+    /**
+     * Delegated. See {@link RepositoryModel#hasStatement(ThreadContext, IRubyObject)}.
+     */
+    @JRubyMethod(name = "has_statement?", required = 1)
+    public RubyBoolean hasStatement(ThreadContext ctx, IRubyObject rdfStatement) {
+        return repositoryModel.hasStatement(ctx, rdfStatement);
+    }
+
+    /**
+     * Delegated. See {@link RepositoryModel#insertStatement(ThreadContext, IRubyObject)}.
+     */
+    @JRubyMethod(name = "insert_statement", required = 1)
+    public IRubyObject insertStatement(ThreadContext ctx, IRubyObject rdfStatement) {
+        return repositoryModel.insertStatement(ctx, rdfStatement);
+    }
+
+    /**
+     * Delegated. See {@link RepositoryModel#deleteStatement(ThreadContext, IRubyObject)}.
+     */
+    @JRubyMethod(name = "delete_statement", required = 1)
+    public IRubyObject deleteStatement(ThreadContext ctx, IRubyObject rdfStatement) {
+        return repositoryModel.deleteStatement(ctx, rdfStatement);
+    }
+
+    /**
+     * Delegated. See {@link RepositoryModel#clearStatements(ThreadContext)}.
+     */
+    @JRubyMethod(name = "clear_statements")
+    public IRubyObject clearStatements(ThreadContext ctx) {
+        return repositoryModel.clearStatements(ctx);
+    }
+
+    @JRubyMethod(name = "each_graph")
+    public IRubyObject iterateGraphs(ThreadContext ctx, Block block) {
         if (block != Block.NULL_BLOCK) {
-            StmtIterator statements = dataset.getDefaultModel().listStatements();
-            while (statements.hasNext()) {
-                Statement statement = statements.nextStatement();
-                block.call(ctx, convertStatement(ctx, statement));
+            RubyClass rubyGraphClass = JenaRepositoryService.findClass(ctx, "Graph");
+            Graph.Allocator.allocate(ctx.runtime, rubyGraphClass);
+
+            Iterator<String> names = dataset.listNames();
+            while (names.hasNext()) {
+                String graphName         = names.next();
+                Model graphModel         = dataset.getNamedModel(graphName);
+
+                // Create new RDF::Jena::Graph ruby object.
+                RubyString rubyGraphName = newString(ctx.runtime, graphName);
+                IRubyObject rubyGraph    = rubyGraphClass.newInstance(ctx, rubyGraphName, Block.NULL_BLOCK);
+
+                // Set Jena Model for graph by accessing Java object.
+                Graph javaGraph          = (Graph) rubyGraph.toJava(Graph.class);
+                javaGraph.setRepositoryModel(new RepositoryModel(rubyGraph, graphModel));
+
+                // Yield the RDF::Jena::Graph to the block.
+                block.call(ctx, rubyGraph);
             }
             return ctx.nil;
         } else {
-            return this.callMethod(ctx, "enum_statement");
+            return this.callMethod(ctx, "enum_graph");
         }
     }
-
-    @JRubyMethod(name = "has_statement?", required = 1)
-    public RubyBoolean hasStatement(ThreadContext ctx, IRubyObject rdfStatement) {
-        if (rdfStatement == null) {
-            return newBoolean(ctx.runtime, false);
-        }
-
-        Model model = dataset.getDefaultModel();
-        Statement statement = convertRDFStatement(ctx, rdfStatement, model);
-        return newBoolean(ctx.runtime, model.contains(statement));
-    }
-
-    @JRubyMethod(name = "insert_statement", required = 1)
-    public IRubyObject insertStatement(ThreadContext ctx, IRubyObject rdfStatement) {
-        if (rdfStatement == null) {
-            return ctx.nil;
-        }
-
-        Model model = dataset.getDefaultModel();
-        Statement statement = convertRDFStatement(ctx, rdfStatement, model);
-        if (!model.contains(statement)) {
-            model.begin();
-            model.add(statement);
-            model.commit();
-        }
-
-        return ctx.nil;
-    }
-
-    @JRubyMethod(name = "delete_statement", required = 1)
-    public IRubyObject deleteStatement(ThreadContext ctx, IRubyObject rdfStatement) {
-        if (rdfStatement == null) {
-            return ctx.nil;
-        }
-
-        Model model = dataset.getDefaultModel();
-        model.remove(convertRDFStatement(ctx, rdfStatement, model));
-
-        return ctx.nil;
-    }
-
-    @JRubyMethod(name = "clear_statements")
-    public IRubyObject clearStatements(ThreadContext ctx) {
-        dataset.getDefaultModel().removeAll();
-
-        return ctx.nil;
-    }
-
-    // TODO: Implement graph_names
-    // TODO: Implement has_graph?
-    // TODO: Implement each_graph
 
     // TODO: Implement insert_graph
 }
