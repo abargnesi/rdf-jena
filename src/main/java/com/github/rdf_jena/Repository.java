@@ -99,7 +99,18 @@ public class Repository extends RubyObject {
         return ctx.nil;
     }
 
-    // TODO: Implement delete_statement
+    @JRubyMethod(name = "delete_statement", required = 1)
+    public IRubyObject deleteStatement(ThreadContext ctx, IRubyObject rdfStatement) {
+        if (rdfStatement == null) {
+            return ctx.nil;
+        }
+
+        Model model = dataset.getDefaultModel();
+        model.remove(convertRDFStatement(ctx, rdfStatement, model));
+
+        return ctx.nil;
+    }
+
     // TODO: Implement clear_statements
 
     // TODO: Implement graph_names
