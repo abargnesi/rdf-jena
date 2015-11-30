@@ -2,6 +2,7 @@ package com.github.rdf_jena;
 
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.ReadWrite;
+import org.jruby.runtime.ThreadContext;
 
 import java.util.function.Function;
 
@@ -14,9 +15,6 @@ public final class TransactionUtil {
             dataset.begin(type);
             try {
                 return transactionBody.apply(dataset);
-            } catch (Throwable t) {
-                dataset.abort();
-                throw t;
             } finally {
                 dataset.commit();
                 dataset.end();

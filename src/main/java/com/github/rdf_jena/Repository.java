@@ -170,7 +170,7 @@ public class Repository extends RubyObject {
                 String javaGraphName = graphName.asJavaString();
                 boolean containsModel = ds.containsNamedModel(javaGraphName);
                 if (containsModel) {
-                    throw ctx.runtime.newRuntimeError("graph already exists");
+                    throw ctx.runtime.newRuntimeError("cannot insert because graph already exists for '" + javaGraphName + "'");
                 }
                 insertIntoNamedGraph(ctx, statementEnumerator, ds.getNamedModel(javaGraphName));
             }
@@ -190,6 +190,49 @@ public class Repository extends RubyObject {
         }
 
         executeInTransaction(dataset, ReadWrite.WRITE, (Dataset ds) -> {
+            IRubyObject graphName = graph.callMethod(ctx, "graph_name");
+            RubyEnumerator statementEnumerator = (RubyEnumerator) graph.callMethod(ctx, "data").callMethod(ctx, "each_statement");
+            if (graphName.isNil()) {
+                clearStatements(ctx);
+                insertIntoDefaultGraph(ctx, statementEnumerator);
+            } else {
+                String javaGraphName = graphName.asJavaString();
+                boolean containsModel = ds.containsNamedModel(javaGraphName);
+                if (!containsModel) {
+                    throw ctx.runtime.newRuntimeError("cannot replace because graph does not exist for '" + javaGraphName + "'");
+                }
+
+                ds.removeNamedModel(javaGraphName);
+                insertIntoNamedGraph(ctx, statementEnumerator, ds.getNamedModel(javaGraphName));
+            }
+            return null;
+        });
+
+        return graph;
+    }
+
+    @JRubyMethod(name = "delete_graph", required = 1)
+    public IRubyObject deleteGraph(ThreadContext ctx, IRubyObject graph) {
+        if (!graph.respondsTo("graph_name")) {
+            throw ctx.runtime.newArgumentError("graph does not provide graph_name");
+        }
+        if (!graph.respondsTo("data")) {
+            throw ctx.runtime.newArgumentError("graph does not provide data");
+        }
+
+        executeInTransaction(dataset, ReadWrite.WRITE, (Dataset ds) -> {
+            IRubyObject graphName = graph.callMethod(ctx, "graph_name");
+            if (graphName.isNil()) {
+                clearStatements(ctx);
+            } else {
+                String javaGraphName = graphName.asJavaString();
+                boolean containsModel = ds.containsNamedModel(javaGraphName);
+                if (!containsModel) {
+                    throw ctx.runtime.newRuntimeError("cannot delete because graph does not exist for '" + javaGraphName + "'");
+                }
+
+                ds.removeNamedModel(javaGraphName);
+            }
             return null;
         });
 

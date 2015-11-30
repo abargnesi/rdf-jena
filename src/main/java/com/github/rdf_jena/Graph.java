@@ -32,7 +32,7 @@ public class Graph extends RubyObject {
     // Ruby methods
     @JRubyMethod(name = "initialize", required = 3)
     public IRubyObject initialize(
-            ThreadContext context,
+            ThreadContext ctx,
             IRubyObject graphName,
             IRubyObject repository,
             IRubyObject unionWithDefault
@@ -52,7 +52,7 @@ public class Graph extends RubyObject {
         // Set up RepositoryModel using model/dataset.
         this.repositoryModel = new RepositoryModel(this, model, ds);
 
-        return context.nil;
+        return ctx.nil;
     }
 
     @JRubyMethod(name = "graph_name")
@@ -62,6 +62,11 @@ public class Graph extends RubyObject {
         }
 
         return graphName;
+    }
+
+    @JRubyMethod(name = "data")
+    public IRubyObject getData(ThreadContext ctx) {
+        return iterateStatements(ctx, Block.NULL_BLOCK);
     }
 
     /**
