@@ -18,7 +18,9 @@ import java.util.Iterator;
 import static com.github.rdf_jena.JenaConverters.convertRDFStatement;
 import static com.github.rdf_jena.JenaRepositoryService.findClass;
 import static com.github.rdf_jena.TransactionUtil.executeInTransaction;
+import static org.jruby.RubyBoolean.newBoolean;
 import static org.jruby.RubyString.newString;
+import static org.jruby.RubySymbol.newSymbol;
 
 @JRubyClass(name = "Repository")
 public class Repository extends RubyObject {
@@ -31,19 +33,28 @@ public class Repository extends RubyObject {
      */
     protected Dataset         dataset;
     protected RepositoryModel repositoryModel;
+    protected boolean         unionEachNgWithDefault;
 
     public Repository(Ruby runtime, RubyClass metaclass) {
         super(runtime, metaclass);
     }
 
-    @JRubyMethod(name = "initialize", required = 1)
+    @JRubyMethod(name = "initialize", required = 1, optional = 1)
     public IRubyObject initialize(
-            ThreadContext context,
-            IRubyObject datasetDirectory
+            ThreadContext ctx,
+            IRubyObject[] args
     ) {
-        dataset         = TDBFactory.createDataset(datasetDirectory.asJavaString());
-        repositoryModel = new RepositoryModel(this, dataset.getDefaultModel(), dataset);
-        return context.nil;
+        String datasetDirectory = args[0].asJavaString();
+        Ruby ruby = ctx.runtime;
+        RubyHash options = (args.length <= 1) ? RubyHash.newHash(ruby) : args[1].convertToHash();
+        Boolean unionEachNgWithDefault = (Boolean) options.get(newSymbol(ruby, "union_each_ng_with_default"));
+        this.unionEachNgWithDefault = unionEachNgWithDefault != null && unionEachNgWithDefault;
+
+        dataset         = TDBFactory.createDataset(datasetDirectory);
+
+        Model defaultModel = executeInTransaction(dataset, ReadWrite.READ, ds -> dataset.getDefaultModel());
+        repositoryModel = new RepositoryModel(this, defaultModel, dataset);
+        return ctx.nil;
     }
 
     /**
@@ -122,7 +133,11 @@ public class Repository extends RubyObject {
                 while (names.hasNext()) {
                     // Create new RDF::Jena::Graph ruby object.
                     RubyString rubyGraphName = newString(ctx.runtime, names.next());
-                    IRubyObject rubyGraph = rubyGraphClass.newInstance(ctx, rubyGraphName, this, Block.NULL_BLOCK);
+                    IRubyObject rubyGraph = rubyGraphClass.newInstance(ctx,
+                            rubyGraphName,
+                            this,
+                            newBoolean(ctx.runtime, unionEachNgWithDefault),
+                            Block.NULL_BLOCK);
 
                     // Yield the RDF::Jena::Graph to the block.
                     block.call(ctx, rubyGraph);
@@ -159,6 +174,22 @@ public class Repository extends RubyObject {
                 }
                 insertIntoNamedGraph(ctx, statementEnumerator, ds.getNamedModel(javaGraphName));
             }
+            return null;
+        });
+
+        return graph;
+    }
+
+    @JRubyMethod(name = "replace_graph", required = 1)
+    public IRubyObject replaceGraph(ThreadContext ctx, IRubyObject graph) {
+        if (!graph.respondsTo("graph_name")) {
+            throw ctx.runtime.newArgumentError("graph does not provide graph_name");
+        }
+        if (!graph.respondsTo("data")) {
+            throw ctx.runtime.newArgumentError("graph does not provide data");
+        }
+
+        executeInTransaction(dataset, ReadWrite.WRITE, (Dataset ds) -> {
             return null;
         });
 

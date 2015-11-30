@@ -30,11 +30,12 @@ public class Graph extends RubyObject {
     }
 
     // Ruby methods
-    @JRubyMethod(name = "initialize", required = 2)
+    @JRubyMethod(name = "initialize", required = 3)
     public IRubyObject initialize(
             ThreadContext context,
             IRubyObject graphName,
-            IRubyObject repository
+            IRubyObject repository,
+            IRubyObject unionWithDefault
     ) {
         this.graphName       = graphName.asString();
         this.repository      = (Repository) repository.toJava(Repository.class);
@@ -43,6 +44,10 @@ public class Graph extends RubyObject {
         Dataset ds = this.repository.dataset;
 
         Model model = executeInTransaction(ds, ReadWrite.READ, t -> ds.getNamedModel(graphName.asJavaString()));
+
+        if ((boolean) unionWithDefault.toJava(boolean.class)) {
+            model = model.union(ds.getDefaultModel());
+        }
 
         // Set up RepositoryModel using model/dataset.
         this.repositoryModel = new RepositoryModel(this, model, ds);
