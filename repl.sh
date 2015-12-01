@@ -2,7 +2,7 @@
 
 mvn -q -o package -DskipTests
 
-cp target/rdf-jena-1.0.0.jar lib/rdf/jena/jars/
+cp target/rdf-jena-0.1.0.jar lib/rdf/jena/jars/
 
 #export JAVA_OPTS="-ea -Xdebug -Xrunjdwp:transport=dt_socket,address=1044,server=y,suspend=y"
 
