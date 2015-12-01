@@ -1,5 +1,9 @@
 *.iml
 *.ipr
 *.iws
+*.swp
+.gem
+.flavors
+VimFlavor*
 /target
 /dependency-reduced-pom.xml
