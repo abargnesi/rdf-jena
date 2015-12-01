@@ -93,6 +93,14 @@ public class Graph extends RubyObject {
     }
 
     /**
+     * Delegated. See {@link RepositoryModel#queryPattern(ThreadContext, IRubyObject, Block)}.
+     */
+    @JRubyMethod(name = {"query_pattern"})
+    public IRubyObject queryPattern(ThreadContext ctx, IRubyObject pattern, Block block) {
+        return repositoryModel.queryPattern(ctx, pattern, block);
+    }
+
+    /**
      * Delegated. See {@link RepositoryModel#hasStatement(ThreadContext, IRubyObject)}.
      */
     @JRubyMethod(name = "has_statement?", required = 1)

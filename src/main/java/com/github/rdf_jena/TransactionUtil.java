@@ -2,7 +2,6 @@ package com.github.rdf_jena;
 
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.ReadWrite;
-import org.jruby.runtime.ThreadContext;
 
 import java.util.function.Function;
 

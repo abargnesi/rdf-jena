@@ -105,4 +105,17 @@ public class JenaConverters {
 
         return null;
     }
+
+    public static Selector convertRDFStatementToSelector(ThreadContext ctx, IRubyObject rdfStatement, Model model) {
+        if (rdfStatement == ctx.nil || !rdfStatement.respondsTo("subject") ||
+                !rdfStatement.respondsTo("predicate") || !rdfStatement.respondsTo("object")) {
+            return null;
+        }
+
+        Resource subject   = convertRDFResource(ctx, rdfStatement.callMethod(ctx, "subject"),   model);
+        Property predicate = convertRDFProperty(ctx, rdfStatement.callMethod(ctx, "predicate"), model);
+        RDFNode  object    = convertRDFTerm(ctx,     rdfStatement.callMethod(ctx, "object"),    model);
+
+        return new SimpleSelector(subject, predicate, object);
+    }
 }

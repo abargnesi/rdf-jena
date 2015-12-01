@@ -2,19 +2,19 @@ package com.github.rdf_jena;
 
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.ReadWrite;
-import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.Statement;
-import org.apache.jena.rdf.model.StmtIterator;
+import org.apache.jena.rdf.model.*;
 import org.jruby.*;
 import org.jruby.runtime.Block;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 
 import static com.github.rdf_jena.JenaConverters.convertRDFStatement;
+import static com.github.rdf_jena.JenaConverters.convertRDFStatementToSelector;
 import static com.github.rdf_jena.RubyRDFConverters.convertStatement;
 import static com.github.rdf_jena.TransactionUtil.executeInTransaction;
 import static org.jruby.RubyBoolean.newBoolean;
 import static org.jruby.RubyFixnum.newFixnum;
+import static org.jruby.RubySymbol.newSymbol;
 
 /**
  * Collaborator for {@link Repository} and {@link Graph}.
@@ -58,6 +58,24 @@ public class RepositoryModel {
             return ctx.nil;
         } else {
             return self.callMethod(ctx, "enum_statement");
+        }
+    }
+
+    public IRubyObject queryPattern(ThreadContext ctx, IRubyObject pattern, Block block) {
+        if (block != Block.NULL_BLOCK) {
+            executeInTransaction(dataset, ReadWrite.READ, ds -> {
+                Model model             = getModel(dataset);
+                Selector selector = convertRDFStatementToSelector(ctx, pattern, model);
+                StmtIterator statements = model.query(selector).listStatements();
+                while (statements.hasNext()) {
+                    Statement statement = statements.nextStatement();
+                    block.call(ctx, convertStatement(ctx, statement));
+                }
+                return null;
+            });
+            return ctx.nil;
+        } else {
+            return self.callMethod(ctx, "enum_for", new IRubyObject[] {newSymbol(ctx.runtime, "query_pattern")});
         }
     }
 
