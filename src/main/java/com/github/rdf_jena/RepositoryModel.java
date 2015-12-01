@@ -22,14 +22,16 @@ import static org.jruby.RubyFixnum.newFixnum;
  */
 public class RepositoryModel {
 
-    private final IRubyObject self;
-    private final Model model;
-    private final Dataset dataset;
+    protected final IRubyObject self;
+    protected final Dataset dataset;
+    protected final String namedModelURI;
+    protected final boolean unionWithDefault;
 
-    public RepositoryModel(IRubyObject self, Model model, Dataset dataset) {
-        this.self    = self;
-        this.model   = model;
-        this.dataset = dataset;
+    public RepositoryModel(IRubyObject self, Dataset dataset, String namedModelURI, boolean unionWithDefault) {
+        this.self             = self;
+        this.namedModelURI    = namedModelURI;
+        this.dataset          = dataset;
+        this.unionWithDefault = unionWithDefault;
     }
 
     @JRubyMethod(name = "durable?")
@@ -39,19 +41,19 @@ public class RepositoryModel {
 
     @JRubyMethod(name = "empty?")
     public RubyBoolean isEmpty(ThreadContext ctx) {
-        return executeInTransaction(dataset, ReadWrite.READ, ds -> newBoolean(ctx.runtime, model.isEmpty()));
+        return executeInTransaction(dataset, ReadWrite.READ, ds -> newBoolean(ctx.runtime, getModel(ds).isEmpty()));
     }
 
     @JRubyMethod(name = "count", alias = {"size"})
     public RubyFixnum count(ThreadContext ctx) {
-        return executeInTransaction(dataset, ReadWrite.READ, ds -> newFixnum(ctx.runtime, model.size()));
+        return executeInTransaction(dataset, ReadWrite.READ, ds -> newFixnum(ctx.runtime, getModel(ds).size()));
     }
 
     @JRubyMethod(name = "each_statement")
     public IRubyObject iterateStatements(ThreadContext ctx, Block block) {
         if (block != Block.NULL_BLOCK) {
             executeInTransaction(dataset, ReadWrite.READ, ds -> {
-                StmtIterator statements = model.listStatements();
+                StmtIterator statements = getModel(ds).listStatements();
                 while (statements.hasNext()) {
                     Statement statement = statements.nextStatement();
                     block.call(ctx, convertStatement(ctx, statement));
@@ -70,8 +72,11 @@ public class RepositoryModel {
             return newBoolean(ctx.runtime, false);
         }
 
-        Statement statement = convertRDFStatement(ctx, rdfStatement, model);
-        return executeInTransaction(dataset, ReadWrite.READ, ds -> newBoolean(ctx.runtime, model.contains(statement)));
+        return executeInTransaction(dataset, ReadWrite.READ, ds -> {
+            Model model         = getModel(ds);
+            Statement statement = convertRDFStatement(ctx, rdfStatement, model);
+            return newBoolean(ctx.runtime, model.contains(statement));
+        });
     }
 
     @JRubyMethod(name = "insert_statement", required = 1)
@@ -80,8 +85,9 @@ public class RepositoryModel {
             return newBoolean(ctx.runtime, false);
         }
 
-        Statement statement = convertRDFStatement(ctx, rdfStatement, model);
         return executeInTransaction(dataset, ReadWrite.WRITE, ds -> {
+            Model model               = getModel(ds);
+            Statement statement       = convertRDFStatement(ctx, rdfStatement, model);
             boolean containsStatement = model.contains(statement);
             if (containsStatement) {
                 return newBoolean(ctx.runtime, false);
@@ -98,15 +104,31 @@ public class RepositoryModel {
             return ctx.nil;
         }
 
-        executeInTransaction(dataset, ReadWrite.WRITE, ds ->
-                model.remove(convertRDFStatement(ctx, rdfStatement, model)));
+        executeInTransaction(dataset, ReadWrite.WRITE, ds -> {
+            Model model = getModel(ds);
+            return model.remove(convertRDFStatement(ctx, rdfStatement, model));
+        });
         return ctx.nil;
     }
 
     @JRubyMethod(name = "clear_statements")
     public IRubyObject clearStatements(ThreadContext ctx) {
-        executeInTransaction(dataset, ReadWrite.WRITE, ds -> model.removeAll());
+        executeInTransaction(dataset, ReadWrite.WRITE, ds -> {
+            Model model = getModel(ds);
+            return model.removeAll();
+        });
         return ctx.nil;
+    }
+
+    protected Model getModel(Dataset dataset) {
+        if (namedModelURI == null) {
+            return dataset.getDefaultModel();
+        } else {
+            Model namedModel = dataset.getNamedModel(namedModelURI);
+            return unionWithDefault ?
+                namedModel.union(dataset.getDefaultModel()) :
+                namedModel;
+        }
     }
 
     // TODO: Implement insert_statements

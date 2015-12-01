@@ -45,15 +45,13 @@ public class Repository extends RubyObject {
             IRubyObject[] args
     ) {
         String datasetDirectory = args[0].asJavaString();
-        Ruby ruby = ctx.runtime;
-        RubyHash options = (args.length <= 1) ? RubyHash.newHash(ruby) : args[1].convertToHash();
+        Ruby ruby                      = ctx.runtime;
+        RubyHash options               = (args.length <= 1) ? RubyHash.newHash(ruby) : args[1].convertToHash();
         Boolean unionEachNgWithDefault = (Boolean) options.get(newSymbol(ruby, "union_each_ng_with_default"));
-        this.unionEachNgWithDefault = unionEachNgWithDefault != null && unionEachNgWithDefault;
+        this.unionEachNgWithDefault    = unionEachNgWithDefault != null && unionEachNgWithDefault;
 
-        dataset         = TDBFactory.createDataset(datasetDirectory);
-
-        Model defaultModel = executeInTransaction(dataset, ReadWrite.READ, ds -> dataset.getDefaultModel());
-        repositoryModel = new RepositoryModel(this, defaultModel, dataset);
+        dataset            = TDBFactory.createDataset(datasetDirectory);
+        repositoryModel    = new RepositoryModel(this, dataset, null, false);
         return ctx.nil;
     }
 
@@ -127,8 +125,7 @@ public class Repository extends RubyObject {
             RubyClass rubyGraphClass = findClass(ctx, "Graph");
             Graph.Allocator.allocate(ctx.runtime, rubyGraphClass);
 
-            dataset.begin(ReadWrite.READ);
-            try {
+            executeInTransaction(dataset, ReadWrite.READ, ds -> {
                 Iterator<String> names = dataset.listNames();
                 while (names.hasNext()) {
                     // Create new RDF::Jena::Graph ruby object.
@@ -142,9 +139,8 @@ public class Repository extends RubyObject {
                     // Yield the RDF::Jena::Graph to the block.
                     block.call(ctx, rubyGraph);
                 }
-            } finally {
-                dataset.end();
-            }
+                return null;
+            });
             return ctx.nil;
         } else {
             return this.callMethod(ctx, "enum_graph");
@@ -161,7 +157,6 @@ public class Repository extends RubyObject {
         }
 
         executeInTransaction(dataset, ReadWrite.WRITE, (Dataset ds) -> {
-
             IRubyObject graphName = graph.callMethod(ctx, "graph_name");
             RubyEnumerator statementEnumerator = (RubyEnumerator) graph.callMethod(ctx, "data").callMethod(ctx, "each_statement");
             if (graphName.isNil()) {

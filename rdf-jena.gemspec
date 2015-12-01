@@ -19,18 +19,18 @@ Gem::Specification.new do |spec|
   spec.files                    = [
                                     Dir.glob('lib/**/*.{jar,rb}'),
                                     __FILE__,
-                                    'README.md'
+                                    'README.md',
+                                    'VERSION',
                                   ].flatten!
   spec.homepage                 = 'https://github.com/abargnesi/rdf-jena'
   spec.rdoc_options             = [
                                     '--title', 'rdf-jena documentation',
                                     '--main', 'README.md',
                                     '--line-numbers',
-                                    'README.md'
+                                    'README.md',
                                   ]
 
-  spec.required_ruby_version    = '>= 2.0.0'
-
+  spec.platform                 = 'java'
   spec.add_runtime_dependency     'rdf',           '1.99.0'
 
   # development gems

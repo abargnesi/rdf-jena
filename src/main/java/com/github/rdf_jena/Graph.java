@@ -1,8 +1,6 @@
 package com.github.rdf_jena;
 
 import org.apache.jena.query.Dataset;
-import org.apache.jena.query.ReadWrite;
-import org.apache.jena.rdf.model.Model;
 import org.jruby.*;
 import org.jruby.anno.JRubyClass;
 import org.jruby.anno.JRubyMethod;
@@ -10,8 +8,6 @@ import org.jruby.runtime.Block;
 import org.jruby.runtime.ObjectAllocator;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
-
-import static com.github.rdf_jena.TransactionUtil.executeInTransaction;
 
 @JRubyClass(name = "Graph")
 public class Graph extends RubyObject {
@@ -22,7 +18,7 @@ public class Graph extends RubyObject {
     protected RubyString graphName;
 
     // java state
-    protected Repository repository;
+    protected Repository      repository;
     protected RepositoryModel repositoryModel;
 
     public Graph(Ruby runtime, RubyClass metaclass) {
@@ -43,14 +39,9 @@ public class Graph extends RubyObject {
         // Get/Create named model from the provided dataset.
         Dataset ds = this.repository.dataset;
 
-        Model model = executeInTransaction(ds, ReadWrite.READ, t -> ds.getNamedModel(graphName.asJavaString()));
-
-        if ((boolean) unionWithDefault.toJava(boolean.class)) {
-            model = model.union(ds.getDefaultModel());
-        }
-
         // Set up RepositoryModel using model/dataset.
-        this.repositoryModel = new RepositoryModel(this, model, ds);
+        boolean unionWithDefaultBool = (boolean) unionWithDefault.toJava(boolean.class);
+        this.repositoryModel = new RepositoryModel(this, ds, graphName.asJavaString(), unionWithDefaultBool);
 
         return ctx.nil;
     }
