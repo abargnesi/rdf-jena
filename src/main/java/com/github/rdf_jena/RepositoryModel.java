@@ -6,7 +6,6 @@ import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.Statement;
 import org.apache.jena.rdf.model.StmtIterator;
 import org.jruby.*;
-import org.jruby.anno.JRubyMethod;
 import org.jruby.runtime.Block;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
@@ -34,22 +33,18 @@ public class RepositoryModel {
         this.unionWithDefault = unionWithDefault;
     }
 
-    @JRubyMethod(name = "durable?")
     public RubyBoolean isDurable(ThreadContext ctx) {
         return newBoolean(ctx.runtime, true);
     }
 
-    @JRubyMethod(name = "empty?")
     public RubyBoolean isEmpty(ThreadContext ctx) {
         return executeInTransaction(dataset, ReadWrite.READ, ds -> newBoolean(ctx.runtime, getModel(ds).isEmpty()));
     }
 
-    @JRubyMethod(name = "count", alias = {"size"})
     public RubyFixnum count(ThreadContext ctx) {
         return executeInTransaction(dataset, ReadWrite.READ, ds -> newFixnum(ctx.runtime, getModel(ds).size()));
     }
 
-    @JRubyMethod(name = "each_statement")
     public IRubyObject iterateStatements(ThreadContext ctx, Block block) {
         if (block != Block.NULL_BLOCK) {
             executeInTransaction(dataset, ReadWrite.READ, ds -> {
@@ -66,7 +61,6 @@ public class RepositoryModel {
         }
     }
 
-    @JRubyMethod(name = "has_statement?", required = 1)
     public RubyBoolean hasStatement(ThreadContext ctx, IRubyObject rdfStatement) {
         if (rdfStatement == null) {
             return newBoolean(ctx.runtime, false);
@@ -79,7 +73,6 @@ public class RepositoryModel {
         });
     }
 
-    @JRubyMethod(name = "insert_statement", required = 1)
     public RubyBoolean insertStatement(ThreadContext ctx, IRubyObject rdfStatement) {
         if (rdfStatement == null) {
             return newBoolean(ctx.runtime, false);
@@ -98,7 +91,6 @@ public class RepositoryModel {
         });
     }
 
-    @JRubyMethod(name = "delete_statement", required = 1)
     public IRubyObject deleteStatement(ThreadContext ctx, IRubyObject rdfStatement) {
         if (rdfStatement == null) {
             return ctx.nil;
@@ -111,7 +103,6 @@ public class RepositoryModel {
         return ctx.nil;
     }
 
-    @JRubyMethod(name = "clear_statements")
     public IRubyObject clearStatements(ThreadContext ctx) {
         executeInTransaction(dataset, ReadWrite.WRITE, ds -> {
             Model model = getModel(ds);

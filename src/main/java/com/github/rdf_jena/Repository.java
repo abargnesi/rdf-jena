@@ -82,7 +82,7 @@ public class Repository extends RubyObject {
     /**
      * Delegated. See {@link RepositoryModel#iterateStatements(ThreadContext, Block)}.
      */
-    @JRubyMethod(name = "each_statement")
+    @JRubyMethod(name = {"each_statement", "each"})
     public IRubyObject iterateStatements(ThreadContext ctx, Block block) {
         return repositoryModel.iterateStatements(ctx, block);
     }
