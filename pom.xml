@@ -5,7 +5,7 @@
     <groupId>com.github</groupId>
     <artifactId>rdf-jena</artifactId>
     <packaging>jar</packaging>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
     <name>rdf-jena</name>
     <description>RDF.rb storage implementation for Apache Jena.</description>
     <url>https://github.com/abargnesi/rdf-jena</url>

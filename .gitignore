@@ -2,6 +2,7 @@
 *.ipr
 *.iws
 *.swp
+.netrwhist
 .gem
 .flavors
 VimFlavor*

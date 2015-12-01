@@ -1,0 +1,9 @@
+--title 'RDF Jena (RDF.rb storage adapter)'
+--readme README.md
+--charset UTF-8
+--main README.md
+--files "README.md,CHANGELOG.md,LICENSE,VERSION"
+--protected
+--private
+"lib/**/*.rb"
+"test/**/*.rb"

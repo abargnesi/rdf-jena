@@ -20,6 +20,7 @@ Gem::Specification.new do |spec|
                                     Dir.glob('lib/**/*.{jar,rb}'),
                                     __FILE__,
                                     'README.md',
+                                    'CHANGELOG.md',
                                     'VERSION',
                                   ].flatten!
   spec.homepage                 = 'https://github.com/abargnesi/rdf-jena'
@@ -28,6 +29,8 @@ Gem::Specification.new do |spec|
                                     '--main', 'README.md',
                                     '--line-numbers',
                                     'README.md',
+                                    'CHANGELOG.md',
+                                    'VERSION',
                                   ]
 
   spec.platform                 = 'java'
