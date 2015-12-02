@@ -8,3 +8,6 @@
 VimFlavor*
 /target
 /dependency-reduced-pom.xml
+
+# Test data directory for rspec tests.
+/test-data

@@ -38,6 +38,7 @@ Gem::Specification.new do |spec|
 
   # development gems
   spec.add_development_dependency 'rdf-spec',      '1.99.0'
+  spec.add_development_dependency 'rdf-vocab',     '~> 0.8.7'
   spec.add_development_dependency 'minitest',      '~> 5.7'
   spec.add_development_dependency 'rake',          '~> 10.4'
   spec.add_development_dependency 'rake-compiler', '~> 0.9'
