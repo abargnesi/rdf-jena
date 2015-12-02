@@ -61,8 +61,12 @@ public class RepositoryModel {
         }
     }
 
-    public IRubyObject queryPattern(ThreadContext ctx, IRubyObject pattern, Block block) {
+    public IRubyObject queryPattern(ThreadContext ctx, IRubyObject[] args, Block block) {
         if (block != Block.NULL_BLOCK) {
+            IRubyObject pattern = args[0];
+
+            // argument 1; unused options
+
             executeInTransaction(dataset, ReadWrite.READ, ds -> {
                 Model model             = getModel(dataset);
                 Selector selector = convertRDFStatementToSelector(ctx, pattern, model);
@@ -75,7 +79,10 @@ public class RepositoryModel {
             });
             return ctx.nil;
         } else {
-            return self.callMethod(ctx, "enum_for", new IRubyObject[] {newSymbol(ctx.runtime, "query_pattern")});
+            IRubyObject[] enumArgs = new IRubyObject[args.length+1];
+            enumArgs[0] = newSymbol(ctx.runtime, "query_pattern");
+            System.arraycopy(args, 0, enumArgs, 1, args.length);
+            return self.callMethod(ctx, "enum_for", enumArgs);
         }
     }
 
