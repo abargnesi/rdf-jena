@@ -4,6 +4,10 @@ All notable changes to rdf-jena will be documented in this file. The curated log
 
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.2.1][0.2.1] - 2015-12-03
+### Added
+- Included install-time checks that JRuby is running on Java 8.
+
 ## 0.2.0 - 2015-12-01
 ### Fixed
 - Alias `each_statement` to `each`. The java method iterateStatements is now provided as both ruby methods.
@@ -22,3 +26,4 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Supporting boolean flag on RDF::Repository to union named graphs with the default when retrieved (see `each_graph`).
 
 [RDF.rb]:   https://github.com/ruby-rdf/rdf
+[0.2.1]:    https://github.com/abargnesi/rdf-jena/compare/0.2.0...0.2.1
