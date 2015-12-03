@@ -33,6 +33,7 @@ Gem::Specification.new do |spec|
                                     'VERSION',
                                   ]
 
+  spec.extensions              << 'ext/jruby/extconf.rb'
   spec.platform                 = 'java'
   spec.add_runtime_dependency     'rdf',           '1.99.0'
 
