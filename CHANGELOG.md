@@ -35,4 +35,5 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Supporting boolean flag on RDF::Repository to union named graphs with the default when retrieved (see `each_graph`).
 
 [RDF.rb]:   https://github.com/ruby-rdf/rdf
+[0.3.0]:    https://github.com/abargnesi/rdf-jena/compare/0.2.1...0.3.0
 [0.2.1]:    https://github.com/abargnesi/rdf-jena/compare/0.2.0...0.2.1
