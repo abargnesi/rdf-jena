@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-mvn -q -o package -DskipTests
+. build.sh
 
-cp target/rdf-jena-0.2.0.jar lib/rdf/jena/jars/
+pushd "$DIR" > /dev/null
 
 #export JAVA_OPTS="-ea -Xdebug -Xrunjdwp:transport=dt_socket,address=1044,server=y,suspend=y"
-
 JRUBY_HOME=$(realpath jruby) \
     PATH="$JRUBY_HOME/bin:$PATH" \
     GEM_HOME=.gem \
     GEM_PATH=.gem \
     .gem/bin/pry -I "./lib" -r "rdf/jena"
+
+popd > /dev/null

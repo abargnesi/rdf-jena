@@ -1,8 +1,16 @@
 package com.github.rdf_jena;
 
+import org.apache.jena.graph.Node;
+import org.apache.jena.graph.Graph;
+import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.ReadWrite;
-import org.apache.jena.rdf.model.*;
+import org.apache.jena.rdf.model.RDFNode;
+import org.apache.jena.riot.Lang;
+import org.apache.jena.riot.RDFDataMgr;
+import org.apache.jena.sparql.core.DatasetGraph;
+import org.apache.jena.sparql.core.Quad;
+import org.apache.jena.sparql.graph.GraphFactory;
 import org.apache.jena.tdb.TDBFactory;
 import org.jruby.*;
 import org.jruby.anno.JRubyClass;
@@ -13,12 +21,18 @@ import org.jruby.runtime.ObjectAllocator;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 
+import java.io.InputStream;
 import java.util.Iterator;
+import java.util.Optional;
 
-import static com.github.rdf_jena.JenaConverters.convertRDFStatement;
+import static com.github.rdf_jena.JenaConverters.convertRDFQuad;
+import static com.github.rdf_jena.JenaConverters.convertRDFResource;
+import static com.github.rdf_jena.JenaConverters.convertRDFTriple;
 import static com.github.rdf_jena.JenaRepositoryService.findClass;
+import static com.github.rdf_jena.RubyRDFConverters.convertQuad;
 import static com.github.rdf_jena.TransactionUtil.executeInTransaction;
 import static org.jruby.RubyBoolean.newBoolean;
+import static org.jruby.RubyFixnum.newFixnum;
 import static org.jruby.RubyString.newString;
 import static org.jruby.RubySymbol.newSymbol;
 
@@ -31,9 +45,7 @@ public class Repository extends RubyObject {
      * Jena {@link Dataset} backed by a TDB database. This state is should be
      * used as final within this Ruby Object.
      */
-    protected Dataset         dataset;
-    protected RepositoryModel repositoryModel;
-    protected boolean         unionEachNgWithDefault;
+    protected Dataset ds;
 
     public Repository(Ruby runtime, RubyClass metaclass) {
         super(runtime, metaclass);
@@ -45,103 +57,227 @@ public class Repository extends RubyObject {
             IRubyObject[] args
     ) {
         String datasetDirectory = args[0].asJavaString();
-        Ruby ruby                      = ctx.runtime;
-        RubyHash options               = (args.length <= 1) ? RubyHash.newHash(ruby) : args[1].convertToHash();
-        Boolean unionEachNgWithDefault = (Boolean) options.get(newSymbol(ruby, "union_each_ng_with_default"));
-        this.unionEachNgWithDefault    = unionEachNgWithDefault != null && unionEachNgWithDefault;
+        ds                      = TDBFactory.createDataset(datasetDirectory);
 
-        dataset            = TDBFactory.createDataset(datasetDirectory);
-        repositoryModel    = new RepositoryModel(this, dataset, null, false);
+        //Ruby ruby                      = ctx.runtime;
+        //RubyHash options               = (args.length <= 1) ? RubyHash.newHash(ruby) : args[1].convertToHash();
+        //Boolean someOption             = (Boolean) options.get(newSymbol(ruby, "some_option"));
+
         return ctx.nil;
     }
 
-    /**
-     * Delegated. See {@link RepositoryModel#isDurable(ThreadContext)}.
-     */
     @JRubyMethod(name = "durable?")
     public RubyBoolean isDurable(ThreadContext ctx) {
-        return repositoryModel.isDurable(ctx);
+        return newBoolean(ctx.runtime, true);
     }
 
-    /**
-     * Delegated. See {@link RepositoryModel#isEmpty(ThreadContext)}.
-     */
     @JRubyMethod(name = "empty?")
     public RubyBoolean isEmpty(ThreadContext ctx) {
-        return repositoryModel.isEmpty(ctx);
+        return executeInTransaction(ds, ReadWrite.READ, ds -> newBoolean(ctx.runtime, ds.asDatasetGraph().isEmpty()));
     }
 
-    /**
-     * Delegated. See {@link RepositoryModel#count(ThreadContext)}.
-     */
-    @JRubyMethod(name = "count", alias = {"size"})
-    public RubyFixnum count(ThreadContext ctx) {
-        return repositoryModel.count(ctx);
+    @JRubyMethod(name = {"count", "size"})
+    public RubyFixnum size(ThreadContext ctx) {
+        return executeInTransaction(ds, ReadWrite.READ, ds -> {
+            Iterator<Quad> quads = ds.asDatasetGraph().find();
+            long size = 0;
+            while (quads.hasNext()) {
+                quads.next(); size += 1;
+            }
+            return newFixnum(ctx.runtime, size);
+        });
     }
 
-    /**
-     * Delegated. See {@link RepositoryModel#iterateStatements(ThreadContext, Block)}.
-     */
+    @JRubyMethod(name = {"graph_count", "graph_size"})
+    public RubyFixnum graphSize(ThreadContext ctx) {
+        return executeInTransaction(ds, ReadWrite.READ, ds -> newFixnum(ctx.runtime, ds.asDatasetGraph().size()));
+    }
+
     @JRubyMethod(name = {"each_statement", "each"})
     public IRubyObject iterateStatements(ThreadContext ctx, Block block) {
-        return repositoryModel.iterateStatements(ctx, block);
+        if (block != Block.NULL_BLOCK) {
+            executeInTransaction(ds, ReadWrite.READ, ds -> {
+                Iterator<Quad> quads = ds.asDatasetGraph().find();
+                while (quads.hasNext()) {
+                    block.call(ctx, convertQuad(ctx, quads.next()));
+                }
+                return null;
+            });
+            return ctx.nil;
+        } else {
+            return callMethod(ctx, "enum_statement");
+        }
     }
 
-    /**
-     * Delegated. See {@link RepositoryModel#queryPattern(ThreadContext, IRubyObject[], Block)}.
-     */
     @JRubyMethod(name = {"query_pattern"}, required = 1, optional = 1)
     public IRubyObject queryPattern(ThreadContext ctx, IRubyObject[] args, Block block) {
-        return repositoryModel.queryPattern(ctx, args, block);
+        if (block != Block.NULL_BLOCK) {
+            IRubyObject pattern = args[0];
+
+            // argument 1; unused options
+
+            executeInTransaction(ds, ReadWrite.READ, ds -> {
+                Quad quadPattern = convertRDFQuad(ctx, pattern);
+                DatasetGraph dg  = ds.asDatasetGraph();
+                Iterator<Quad> quads;
+                if (quadPattern == null) {
+                    quads = dg.find();
+                } else {
+                    quads = dg.find(
+                            quadPattern.getSubject(),
+                            quadPattern.getPredicate(),
+                            quadPattern.getObject(),
+                            quadPattern.getGraph()
+                    );
+                }
+                while (quads.hasNext()) {
+                    block.call(ctx, convertQuad(ctx, quads.next()));
+                }
+                return null;
+            });
+            return ctx.nil;
+        } else {
+            IRubyObject[] enumArgs = new IRubyObject[args.length+1];
+            enumArgs[0] = newSymbol(ctx.runtime, "query_pattern");
+            System.arraycopy(args, 0, enumArgs, 1, args.length);
+            return callMethod(ctx, "enum_for", enumArgs);
+        }
     }
 
-    /**
-     * Delegated. See {@link RepositoryModel#hasStatement(ThreadContext, IRubyObject)}.
-     */
     @JRubyMethod(name = "has_statement?", required = 1)
     public RubyBoolean hasStatement(ThreadContext ctx, IRubyObject rdfStatement) {
-        return repositoryModel.hasStatement(ctx, rdfStatement);
+        if (rdfStatement == null) {
+            return newBoolean(ctx.runtime, false);
+        }
+
+        return executeInTransaction(ds, ReadWrite.READ, ds -> {
+            Quad quad = convertRDFQuad(ctx, rdfStatement);
+            return newBoolean(ctx.runtime, ds.asDatasetGraph().contains(quad));
+        });
     }
 
-    /**
-     * Delegated. See {@link RepositoryModel#insertStatement(ThreadContext, IRubyObject)}.
-     */
     @JRubyMethod(name = "insert_statement", required = 1)
     public IRubyObject insertStatement(ThreadContext ctx, IRubyObject rdfStatement) {
-        return repositoryModel.insertStatement(ctx, rdfStatement);
+        if (rdfStatement == null) {
+            return newBoolean(ctx.runtime, false);
+        }
+
+        return executeInTransaction(ds, ReadWrite.WRITE, ds -> {
+            Quad quad = convertRDFQuad(ctx, rdfStatement);
+
+            DatasetGraph dg = ds.asDatasetGraph();
+            if (dg.contains(quad)) {
+                return newBoolean(ctx.runtime, false);
+            }
+
+            dg.add(quad);
+            return newBoolean(ctx.runtime, true);
+        });
     }
 
-    /**
-     * Delegated. See {@link RepositoryModel#deleteStatement(ThreadContext, IRubyObject)}.
-     */
+    @JRubyMethod(name = "insert_statements", required = 1)
+    public IRubyObject insertStatements(ThreadContext ctx, IRubyObject rdfStatements) {
+        if (rdfStatements == null) {
+            return newBoolean(ctx.runtime, false);
+        }
+
+        return executeInTransaction(ds, ReadWrite.WRITE, ds -> {
+            DatasetGraph   dg                  = ds.asDatasetGraph();
+            RubyEnumerator statementEnumerator = (RubyEnumerator) rdfStatements.callMethod(ctx, "each");
+            try {
+                while (true) {
+                    RubyArray array = statementEnumerator.next(ctx).convertToArray();
+                    Node subject   = Optional.ofNullable(convertRDFResource(ctx, array.entry(0))).map(RDFNode::asNode).orElse(null);
+                    Node predicate = Optional.ofNullable(convertRDFResource(ctx, array.entry(1))).map(RDFNode::asNode).orElse(null);
+                    Node object    = Optional.ofNullable(convertRDFResource(ctx, array.entry(2))).map(RDFNode::asNode).orElse(null);
+                    Node graph     = Optional.ofNullable(convertRDFResource(ctx, array.entry(3))).map(RDFNode::asNode).orElse(null);
+                    dg.add(new Quad(graph, subject, predicate, object));
+                }
+            } catch (RaiseException ex) {
+                // Handle StopIteration as a terminator for iterating a Ruby Enumerator.
+                // All other exceptions are rethrown.
+                if (ex.getException().getMetaClass() == ctx.runtime.getStopIteration()) {
+                    // safe to skip
+                } else {
+                    // need to rethrow, this is truly an exception
+                    throw ex;
+                }
+            }
+            return newBoolean(ctx.runtime, true);
+        });
+    }
+
+    @JRubyMethod(name = "insert_reader", required = 1)
+    public IRubyObject insertReader(ThreadContext ctx, IRubyObject reader) {
+        RubyFile file      = ((RubyFile) reader);
+        InputStream stream = file.getInStream();
+
+        return executeInTransaction(ds, ReadWrite.WRITE, ds -> {
+            DatasetGraph graph = ds.asDatasetGraph();
+            RDFDataMgr.read(graph, stream, Lang.NQUADS);
+            return newBoolean(ctx.runtime, true);
+        });
+    }
+
     @JRubyMethod(name = "delete_statement", required = 1)
     public IRubyObject deleteStatement(ThreadContext ctx, IRubyObject rdfStatement) {
-        return repositoryModel.deleteStatement(ctx, rdfStatement);
+        if (rdfStatement == null) {
+            return ctx.nil;
+        }
+
+        executeInTransaction(ds, ReadWrite.WRITE, ds -> {
+            DatasetGraph dg = ds.asDatasetGraph();
+            Quad quad = convertRDFQuad(ctx, rdfStatement);
+            dg.delete(quad);
+            return null;
+        });
+        return ctx.nil;
     }
 
-    /**
-     * Delegated. See {@link RepositoryModel#clearStatements(ThreadContext)}.
-     */
     @JRubyMethod(name = "clear_statements")
     public IRubyObject clearStatements(ThreadContext ctx) {
-        return repositoryModel.clearStatements(ctx);
+        executeInTransaction(ds, ReadWrite.WRITE, ds -> {
+            ds.asDatasetGraph().clear();
+            return null;
+        });
+        return ctx.nil;
+    }
+
+    @JRubyMethod(name = "graph", required = 1)
+    public IRubyObject getGraph(ThreadContext ctx, IRubyObject graphName) {
+        RubyClass rubyGraphClass = findClass(ctx, "Graph");
+        com.github.rdf_jena.Graph.Allocator.allocate(ctx.runtime, rubyGraphClass);
+
+        return executeInTransaction(ds, ReadWrite.READ, ds -> {
+            DatasetGraph dg = ds.asDatasetGraph();
+            RubySymbol defaultGraph = newSymbol(ctx.runtime, "default");
+            if (graphName.isNil() || graphName == defaultGraph) {
+                return rubyGraphClass.newInstance(ctx, defaultGraph, this, Block.NULL_BLOCK);
+            } else {
+                String javaGraphName = graphName.asString().asJavaString();
+                if (!dg.containsGraph(NodeFactory.createURI(javaGraphName))) {
+                    return ctx.nil;
+                }
+                return rubyGraphClass.newInstance(ctx, graphName, this, Block.NULL_BLOCK);
+            }
+        });
     }
 
     @JRubyMethod(name = "each_graph")
     public IRubyObject iterateGraphs(ThreadContext ctx, Block block) {
         if (block != Block.NULL_BLOCK) {
             RubyClass rubyGraphClass = findClass(ctx, "Graph");
-            Graph.Allocator.allocate(ctx.runtime, rubyGraphClass);
+            com.github.rdf_jena.Graph.Allocator.allocate(ctx.runtime, rubyGraphClass);
 
-            executeInTransaction(dataset, ReadWrite.READ, ds -> {
-                Iterator<String> names = dataset.listNames();
-                while (names.hasNext()) {
+            executeInTransaction(ds, ReadWrite.READ, ds -> {
+                DatasetGraph dg = ds.asDatasetGraph();
+                Iterator<Node> graphNodes = dg.listGraphNodes();
+                while (graphNodes.hasNext()) {
                     // Create new RDF::Jena::Graph ruby object.
-                    RubyString rubyGraphName = newString(ctx.runtime, names.next());
+                    RubyString rubyGraphName = newString(ctx.runtime, graphNodes.next().getURI());
                     IRubyObject rubyGraph = rubyGraphClass.newInstance(ctx,
                             rubyGraphName,
                             this,
-                            newBoolean(ctx.runtime, unionEachNgWithDefault),
                             Block.NULL_BLOCK);
 
                     // Yield the RDF::Jena::Graph to the block.
@@ -156,97 +292,99 @@ public class Repository extends RubyObject {
     }
 
     @JRubyMethod(name = "insert_graph", required = 1)
-    public IRubyObject insertGraph(ThreadContext ctx, IRubyObject graph) {
-        if (!graph.respondsTo("graph_name")) {
+    public IRubyObject insertGraph(ThreadContext ctx, IRubyObject rubyGraph) {
+        if (!rubyGraph.respondsTo("graph_name")) {
             throw ctx.runtime.newArgumentError("graph does not provide graph_name");
         }
-        if (!graph.respondsTo("data")) {
+        if (!rubyGraph.respondsTo("data")) {
             throw ctx.runtime.newArgumentError("graph does not provide data");
         }
 
-        executeInTransaction(dataset, ReadWrite.WRITE, (Dataset ds) -> {
-            IRubyObject graphName = graph.callMethod(ctx, "graph_name");
-            RubyEnumerator statementEnumerator = (RubyEnumerator) graph.callMethod(ctx, "data").callMethod(ctx, "each_statement");
-            if (graphName.isNil()) {
-                insertIntoDefaultGraph(ctx, statementEnumerator);
-            } else {
-                String javaGraphName = graphName.asJavaString();
-                boolean containsModel = ds.containsNamedModel(javaGraphName);
-                if (containsModel) {
-                    throw ctx.runtime.newRuntimeError("cannot insert because graph already exists for '" + javaGraphName + "'");
-                }
-                insertIntoNamedGraph(ctx, statementEnumerator, ds.getNamedModel(javaGraphName));
+        executeInTransaction(ds, ReadWrite.WRITE, (Dataset ds) -> {
+            DatasetGraph dg = ds.asDatasetGraph();
+            IRubyObject graphName = rubyGraph.callMethod(ctx, "graph_name");
+            String javaGraphName  = graphName.isNil() ? null : graphName.asJavaString();
+
+            // Error if graph already exists.
+            Node graphNode = NodeFactory.createURI(javaGraphName);
+            if (dg.containsGraph(graphNode)) {
+                throw ctx.runtime.newRuntimeError("cannot insert because graph already exists for '" + javaGraphName + "'");
             }
+
+            // Insert into new memory graph.
+            Graph insertGraph = GraphFactory.createDefaultGraph();
+            RubyEnumerator statementEnumerator = (RubyEnumerator) rubyGraph.callMethod(ctx, "data").callMethod(ctx, "each_statement");
+            insertIntoGraph(ctx, statementEnumerator, insertGraph);
+
+            // Add memory graph to Dataset Graph (backed by TDB).
+            dg.addGraph(graphNode, insertGraph);
             return null;
         });
 
-        return graph;
+        return rubyGraph;
     }
 
     @JRubyMethod(name = "replace_graph", required = 1)
-    public IRubyObject replaceGraph(ThreadContext ctx, IRubyObject graph) {
-        if (!graph.respondsTo("graph_name")) {
+    public IRubyObject replaceGraph(ThreadContext ctx, IRubyObject rubyGraph) {
+        if (!rubyGraph.respondsTo("graph_name")) {
             throw ctx.runtime.newArgumentError("graph does not provide graph_name");
         }
-        if (!graph.respondsTo("data")) {
+        if (!rubyGraph.respondsTo("data")) {
             throw ctx.runtime.newArgumentError("graph does not provide data");
         }
 
-        executeInTransaction(dataset, ReadWrite.WRITE, (Dataset ds) -> {
-            IRubyObject graphName = graph.callMethod(ctx, "graph_name");
-            RubyEnumerator statementEnumerator = (RubyEnumerator) graph.callMethod(ctx, "data").callMethod(ctx, "each_statement");
-            if (graphName.isNil()) {
-                clearStatements(ctx);
-                insertIntoDefaultGraph(ctx, statementEnumerator);
-            } else {
-                String javaGraphName = graphName.asJavaString();
-                boolean containsModel = ds.containsNamedModel(javaGraphName);
-                if (!containsModel) {
-                    throw ctx.runtime.newRuntimeError("cannot replace because graph does not exist for '" + javaGraphName + "'");
-                }
+        executeInTransaction(ds, ReadWrite.WRITE, (Dataset ds) -> {
+            DatasetGraph dg       = ds.asDatasetGraph();
+            IRubyObject graphName = rubyGraph.callMethod(ctx, "graph_name");
+            String javaGraphName  = graphName.isNil() ? null : graphName.asJavaString();
 
-                ds.removeNamedModel(javaGraphName);
-                insertIntoNamedGraph(ctx, statementEnumerator, ds.getNamedModel(javaGraphName));
+            // Error if graph does not exists.
+            Node graphNode = NodeFactory.createURI(javaGraphName);
+            if (!dg.containsGraph(graphNode)) {
+                throw ctx.runtime.newRuntimeError("cannot replace because graph does not exist for '" + javaGraphName + "'");
             }
+
+            Graph graph                        = dg.getGraph(NodeFactory.createURI(javaGraphName));
+            RubyEnumerator statementEnumerator = (RubyEnumerator) rubyGraph.callMethod(ctx, "data").callMethod(ctx, "each_statement");
+            graph.clear();
+            insertIntoGraph(ctx, statementEnumerator, graph);
             return null;
         });
 
-        return graph;
+        return rubyGraph;
     }
 
     @JRubyMethod(name = "delete_graph", required = 1)
-    public IRubyObject deleteGraph(ThreadContext ctx, IRubyObject graph) {
-        if (!graph.respondsTo("graph_name")) {
+    public IRubyObject deleteGraph(ThreadContext ctx, IRubyObject rubyGraph) {
+        if (!rubyGraph.respondsTo("graph_name")) {
             throw ctx.runtime.newArgumentError("graph does not provide graph_name");
         }
-        if (!graph.respondsTo("data")) {
+        if (!rubyGraph.respondsTo("data")) {
             throw ctx.runtime.newArgumentError("graph does not provide data");
         }
 
-        executeInTransaction(dataset, ReadWrite.WRITE, (Dataset ds) -> {
-            IRubyObject graphName = graph.callMethod(ctx, "graph_name");
-            if (graphName.isNil()) {
-                clearStatements(ctx);
-            } else {
-                String javaGraphName = graphName.asJavaString();
-                boolean containsModel = ds.containsNamedModel(javaGraphName);
-                if (!containsModel) {
-                    throw ctx.runtime.newRuntimeError("cannot delete because graph does not exist for '" + javaGraphName + "'");
-                }
+        executeInTransaction(ds, ReadWrite.WRITE, (Dataset ds) -> {
+            DatasetGraph dg       = ds.asDatasetGraph();
+            IRubyObject graphName = rubyGraph.callMethod(ctx, "graph_name");
+            String javaGraphName  = graphName.isNil() ? null : graphName.asJavaString();
+            Node graphNode        = NodeFactory.createURI(javaGraphName);
 
-                ds.removeNamedModel(javaGraphName);
+            // Error if graph does not exists.
+            if (!dg.containsGraph(graphNode)) {
+                throw ctx.runtime.newRuntimeError("cannot delete because graph does not exist for '" + javaGraphName + "'");
             }
+
+            dg.removeGraph(graphNode);
             return null;
         });
 
-        return graph;
+        return rubyGraph;
     }
 
-    private void insertIntoNamedGraph(ThreadContext ctx, RubyEnumerator statementEnumerator, Model namedGraph) {
+    private void insertIntoGraph(ThreadContext ctx, RubyEnumerator statementEnumerator, Graph graph) {
         try {
             while (true) {
-                Statement stmt = convertRDFStatement(ctx, statementEnumerator.next(ctx), namedGraph);
-                namedGraph.add(stmt);
+                graph.add(convertRDFTriple(ctx, statementEnumerator.next(ctx)));
             }
         } catch (RaiseException ex) {
             // Handle StopIteration as a terminator for iterating a Ruby Enumerator.
@@ -259,24 +397,4 @@ public class Repository extends RubyObject {
             }
         }
     }
-
-    private void insertIntoDefaultGraph(ThreadContext ctx, RubyEnumerator statementEnumerator) {
-        try {
-            while (true) {
-                insertStatement(ctx, statementEnumerator.next(ctx));
-            }
-        } catch (RaiseException ex) {
-            // Handle StopIteration as a terminator for iterating a Ruby Enumerator.
-            // All other exceptions are rethrown.
-            if (ex.getException().getMetaClass() == ctx.runtime.getStopIteration()) {
-                // safe to skip
-            } else {
-                // need to rethrow, this is truly an exception
-                throw ex;
-            }
-        }
-    }
-
-    // TODO: Provide replace_graph (Not provided by RDF mixins)
-    // TODO: Provide delete_graph (Not provided by RDF mixins)
 }

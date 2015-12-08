@@ -1,6 +1,10 @@
 package com.github.rdf_jena;
 
+import org.apache.jena.graph.Node;
+import org.apache.jena.graph.Triple;
+import org.apache.jena.graph.impl.LiteralLabel;
 import org.apache.jena.rdf.model.*;
+import org.apache.jena.sparql.core.Quad;
 import org.jruby.*;
 import org.jruby.runtime.Block;
 import org.jruby.runtime.ThreadContext;
@@ -34,7 +38,6 @@ public class RubyRDFConverters {
         RDF_Literal   = rdfModule.getClass("Literal");
     }
 
-
     public static IRubyObject convertStatement(ThreadContext ctx, Statement statement) {
         Map<RubySymbol, IRubyObject> options = new HashMap<>();
         options.put(RubySymbol.newSymbol(ctx.runtime, "subject"), convertResource(ctx, statement.getSubject()));
@@ -43,6 +46,68 @@ public class RubyRDFConverters {
         RubyHash optionsHash = RubyHash.newHash(ctx.runtime, options, ctx.nil);
 
         return RDF_Statement.newInstance(ctx, optionsHash, Block.NULL_BLOCK);
+    }
+
+    public static IRubyObject convertQuad(ThreadContext ctx, Quad quad) {
+        Map<RubySymbol, IRubyObject> options = new HashMap<>();
+        options.put(RubySymbol.newSymbol(ctx.runtime, "subject"),    convertNodeToResource(ctx, quad.getSubject()));
+        options.put(RubySymbol.newSymbol(ctx.runtime, "predicate"),  convertNodeToURI(ctx, quad.getPredicate()));
+        options.put(RubySymbol.newSymbol(ctx.runtime, "object"),     convertNodeToObject(ctx, quad.getObject()));
+        options.put(RubySymbol.newSymbol(ctx.runtime, "graph_name"), convertNodeToResource(ctx, quad.getGraph()));
+
+        RubyHash optionsHash = RubyHash.newHash(ctx.runtime, options, ctx.nil);
+        return RDF_Statement.newInstance(ctx, optionsHash, Block.NULL_BLOCK);
+    }
+
+    public static IRubyObject convertTriple(ThreadContext ctx, Triple triple) {
+        Map<RubySymbol, IRubyObject> options = new HashMap<>();
+        options.put(RubySymbol.newSymbol(ctx.runtime, "subject"),    convertNodeToResource(ctx, triple.getSubject()));
+        options.put(RubySymbol.newSymbol(ctx.runtime, "predicate"),  convertNodeToURI(ctx,      triple.getPredicate()));
+        options.put(RubySymbol.newSymbol(ctx.runtime, "object"),     convertNodeToObject(ctx,   triple.getObject()));
+
+        RubyHash optionsHash = RubyHash.newHash(ctx.runtime, options, ctx.nil);
+        return RDF_Statement.newInstance(ctx, optionsHash, Block.NULL_BLOCK);
+    }
+
+    public static IRubyObject convertNodeToResource(ThreadContext ctx, Node node) {
+        if (node.isURI()) {
+            IRubyObject uri = RubyString.newString(ctx.runtime, node.getURI());
+            return RDF_Resource.send(ctx, RubySymbol.newSymbol(ctx.runtime, "new"), uri, Block.NULL_BLOCK);
+        } else {
+            IRubyObject blankNode = RubySymbol.newSymbol(ctx.runtime, node.getBlankNodeLabel());
+            return RDF_Resource.send(ctx, RubySymbol.newSymbol(ctx.runtime, "new"), blankNode, Block.NULL_BLOCK);
+        }
+    }
+
+    public static IRubyObject convertNodeToURI(ThreadContext ctx, Node node) {
+        return RDF_URI.newInstance(ctx, RubyString.newString(ctx.runtime, node.getURI()), Block.NULL_BLOCK);
+    }
+
+    public static IRubyObject convertNodeToObject(ThreadContext ctx, Node node) {
+        if (node.isURI()) {
+            IRubyObject uri = RubyString.newString(ctx.runtime, node.getURI());
+            return RDF_Resource.send(ctx, RubySymbol.newSymbol(ctx.runtime, "new"), uri, Block.NULL_BLOCK);
+        } else if (node.isLiteral()) {
+            LiteralLabel lit   = node.getLiteral();
+            String datatypeURI = lit.getDatatypeURI();
+            String language    = lit.language();
+            String value       = lit.getLexicalForm();
+
+            Map<RubySymbol, IRubyObject> options = new HashMap<>();
+            options.put(RubySymbol.newSymbol(ctx.runtime, "language"), convertLanguage(ctx, language));
+            options.put(RubySymbol.newSymbol(ctx.runtime, "datatype"), convertDatatype(ctx, datatypeURI));
+
+            RubyHash optionsHash = RubyHash.newHash(ctx.runtime, options, ctx.nil);
+            return RDF_Literal.newInstance(
+                    ctx,
+                    RubyString.newString(ctx.runtime, value),
+                    optionsHash,
+                    Block.NULL_BLOCK
+            );
+        } else {
+            IRubyObject blankNode = RubyString.newString(ctx.runtime, node.getBlankNodeLabel());
+            return RDF_Resource.send(ctx, RubySymbol.newSymbol(ctx.runtime, "new"), blankNode, Block.NULL_BLOCK);
+        }
     }
 
     public static IRubyObject convertResource(ThreadContext ctx, Resource resource) {

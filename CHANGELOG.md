@@ -4,6 +4,15 @@ All notable changes to rdf-jena will be documented in this file. The curated log
 
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.3.0][0.3.0] - 2015-12-07
+### Changed
+- RDF::Jena::Repository now acts like a Jena DatasetGraph. This can be treated like a quad store as well as individual graphs (i.e. each_graph).
+- RDF::Jena::Graph now acts like a Jena Graph.
+
+### Added
+- Repository/Graph now implement insert_statements(enumerator) and insert_reader(IO). The insert_reader only takes IO at the moment and assumes NQUADS for Repository, NTRIPLES from Graph.
+- Repository provides the 'graph_size' method to return number of graphs. The 'size' method will return number of quads in the Repository.
+
 ## [0.2.1][0.2.1] - 2015-12-03
 ### Added
 - Included install-time checks that JRuby is running on Java 8.

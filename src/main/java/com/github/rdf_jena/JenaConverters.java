@@ -1,26 +1,81 @@
 package com.github.rdf_jena;
 
+import org.apache.jena.graph.Triple;
 import org.apache.jena.rdf.model.*;
+import org.apache.jena.sparql.core.Quad;
 import org.jruby.RubyBoolean;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 
+import java.util.Optional;
+
 public class JenaConverters {
 
-    public static Statement convertRDFStatement(ThreadContext ctx, IRubyObject rdfStatement, Model model) {
+    static Model MODEL = ModelFactory.createDefaultModel();
+
+    public static Statement convertRDFStatement(ThreadContext ctx, IRubyObject rdfStatement) {
         if (rdfStatement == ctx.nil || !rdfStatement.respondsTo("subject") ||
                 !rdfStatement.respondsTo("predicate") || !rdfStatement.respondsTo("object")) {
             return null;
         }
 
-        Resource subject   = convertRDFResource(ctx, rdfStatement.callMethod(ctx, "subject"),   model);
-        Property predicate = convertRDFProperty(ctx, rdfStatement.callMethod(ctx, "predicate"), model);
-        RDFNode  object    = convertRDFTerm(ctx,     rdfStatement.callMethod(ctx, "object"),    model);
+        Resource subject   = convertRDFResource(ctx, rdfStatement.callMethod(ctx, "subject"));
+        Property predicate = convertRDFProperty(ctx, rdfStatement.callMethod(ctx, "predicate"));
+        RDFNode  object    = convertRDFTerm(ctx,     rdfStatement.callMethod(ctx, "object"));
 
-        return model.createStatement(subject, predicate, object);
+        return MODEL.createStatement(subject, predicate, object);
     }
 
-    public static Resource convertRDFResource(ThreadContext ctx, IRubyObject rdfResource, Model model) {
+    public static Quad convertRDFQuad(ThreadContext ctx, IRubyObject rdfStatement) {
+        if (rdfStatement == ctx.nil || !rdfStatement.respondsTo("subject") ||
+                !rdfStatement.respondsTo("predicate") || !rdfStatement.respondsTo("object")) {
+            return null;
+        }
+
+        Resource subject   = convertRDFResource(ctx, rdfStatement.callMethod(ctx, "subject"));
+        Property predicate = convertRDFProperty(ctx, rdfStatement.callMethod(ctx, "predicate"));
+        RDFNode  object    = convertRDFTerm(ctx,     rdfStatement.callMethod(ctx, "object"));
+        Resource graphName = convertRDFResource(ctx, rdfStatement.callMethod(ctx, "graph_name"));
+
+        return new Quad(
+                Optional.ofNullable(graphName).map(RDFNode::asNode).orElse(null),
+                Optional.ofNullable(subject).map(RDFNode::asNode).orElse(null),
+                Optional.ofNullable(predicate).map(RDFNode::asNode).orElse(null),
+                Optional.ofNullable(object).map(RDFNode::asNode).orElse(null)
+        );
+    }
+
+    public static Triple convertRDFTriple(ThreadContext ctx, IRubyObject rdfStatement) {
+        if (rdfStatement == ctx.nil || !rdfStatement.respondsTo("subject") ||
+                !rdfStatement.respondsTo("predicate") || !rdfStatement.respondsTo("object")) {
+            return null;
+        }
+
+        Resource subject   = convertRDFResource(ctx, rdfStatement.callMethod(ctx, "subject"));
+        Property predicate = convertRDFProperty(ctx, rdfStatement.callMethod(ctx, "predicate"));
+        RDFNode  object    = convertRDFTerm(ctx,     rdfStatement.callMethod(ctx, "object"));
+
+        return new Triple(
+                Optional.ofNullable(subject).map(RDFNode::asNode).orElse(null),
+                Optional.ofNullable(predicate).map(RDFNode::asNode).orElse(null),
+                Optional.ofNullable(object).map(RDFNode::asNode).orElse(null)
+        );
+    }
+
+    public static Selector convertRDFStatementToSelector(ThreadContext ctx, IRubyObject rdfStatement) {
+        if (rdfStatement == ctx.nil || !rdfStatement.respondsTo("subject") ||
+                !rdfStatement.respondsTo("predicate") || !rdfStatement.respondsTo("object")) {
+            return null;
+        }
+
+        Resource subject   = convertRDFResource(ctx, rdfStatement.callMethod(ctx, "subject"));
+        Property predicate = convertRDFProperty(ctx, rdfStatement.callMethod(ctx, "predicate"));
+        RDFNode  object    = convertRDFTerm(ctx,     rdfStatement.callMethod(ctx, "object"));
+
+        return new SimpleSelector(subject, predicate, object);
+    }
+
+    public static Resource convertRDFResource(ThreadContext ctx, IRubyObject rdfResource) {
         if (rdfResource == ctx.nil || !rdfResource.respondsTo("uri?") || !rdfResource.respondsTo("anonymous?")) {
             return null;
         }
@@ -32,7 +87,7 @@ public class JenaConverters {
         }
         boolean isURI = (boolean) uriReturn.toJava(boolean.class);
         if (isURI) {
-            return model.createResource(rdfResource.callMethod(ctx, "to_s").asJavaString());
+            return MODEL.createResource(rdfResource.callMethod(ctx, "to_s").asJavaString());
         }
 
         // Return new anonymous resource.
@@ -42,14 +97,14 @@ public class JenaConverters {
         }
         boolean isAnonymous = (boolean) anonymousReturn.toJava(boolean.class);
         if (isAnonymous) {
-            return model.createResource(AnonId.create(rdfResource.callMethod(ctx, "to_s").asJavaString()));
+            return MODEL.createResource(AnonId.create(rdfResource.callMethod(ctx, "to_s").asJavaString()));
         }
 
         // Return null if rdfResource was neither a URI or anonymous resource
         return null;
     }
 
-    public static Property convertRDFProperty(ThreadContext ctx, IRubyObject rdfProperty, Model model) {
+    public static Property convertRDFProperty(ThreadContext ctx, IRubyObject rdfProperty) {
         if (rdfProperty == ctx.nil || !rdfProperty.respondsTo("uri?")) {
             return null;
         }
@@ -60,16 +115,21 @@ public class JenaConverters {
         }
         boolean isURI = (boolean) uriReturn.toJava(boolean.class);
         if (isURI) {
-            return model.createProperty(rdfProperty.callMethod(ctx, "to_s").asJavaString());
+            return MODEL.createProperty(rdfProperty.callMethod(ctx, "to_s").asJavaString());
         }
 
         return null;
     }
 
-    public static RDFNode convertRDFTerm(ThreadContext ctx, IRubyObject rdfTerm, Model model) {
-        if (rdfTerm == ctx.nil || !rdfTerm.respondsTo("resource?") ||
-                !rdfTerm.respondsTo("node?") || !rdfTerm.respondsTo("literal?")) {
+    public static RDFNode convertRDFTerm(ThreadContext ctx, IRubyObject rdfTerm) {
+        if (rdfTerm == ctx.nil) {
             return null;
+        }
+
+        if (!rdfTerm.respondsTo("resource?") || !rdfTerm.respondsTo("node?") ||
+                !rdfTerm.respondsTo("literal?")) {
+            String literal = rdfTerm.asString().asJavaString();
+            return MODEL.createLiteral(literal);
         }
 
         IRubyObject resourceReturn = rdfTerm.callMethod(ctx, "resource?");
@@ -85,11 +145,11 @@ public class JenaConverters {
             boolean isNode = (boolean) nodeReturn.toJava(boolean.class);
             if (isNode) {
                 String id = rdfTerm.callMethod(ctx, "id").asString().asJavaString();
-                return model.createResource(AnonId.create(id));
+                return MODEL.createResource(AnonId.create(id));
             }
 
             String uri = rdfTerm.callMethod(ctx, "to_s").asJavaString();
-            return model.createResource(uri);
+            return MODEL.createResource(uri);
         } else {
             IRubyObject literalReturn = rdfTerm.callMethod(ctx, "literal?");
             if (!(literalReturn instanceof RubyBoolean)) {
@@ -99,23 +159,10 @@ public class JenaConverters {
             if (isLiteral) {
                 String value = rdfTerm.callMethod(ctx, "value").asString().asJavaString();
                 String dtype = rdfTerm.callMethod(ctx, "datatype").asString().asJavaString();
-                return model.createTypedLiteral(value, dtype);
+                return MODEL.createTypedLiteral(value, dtype);
             }
         }
 
         return null;
-    }
-
-    public static Selector convertRDFStatementToSelector(ThreadContext ctx, IRubyObject rdfStatement, Model model) {
-        if (rdfStatement == ctx.nil || !rdfStatement.respondsTo("subject") ||
-                !rdfStatement.respondsTo("predicate") || !rdfStatement.respondsTo("object")) {
-            return null;
-        }
-
-        Resource subject   = convertRDFResource(ctx, rdfStatement.callMethod(ctx, "subject"),   model);
-        Property predicate = convertRDFProperty(ctx, rdfStatement.callMethod(ctx, "predicate"), model);
-        RDFNode  object    = convertRDFTerm(ctx,     rdfStatement.callMethod(ctx, "object"),    model);
-
-        return new SimpleSelector(subject, predicate, object);
     }
 }
