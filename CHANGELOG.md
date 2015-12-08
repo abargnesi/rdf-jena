@@ -4,6 +4,14 @@ All notable changes to rdf-jena will be documented in this file. The curated log
 
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.3.1][0.3.1] - 2015-12-08
+### Fixed
+- Fixed RDF::Jena::Repository to store statements in the correct graph. If a graph_name is not provided the default graph for the Jena dataset is used.
+- Fixed has_statement? and query_pattern to support nilable s,p,o,c values.
+
+### Added
+- Added insert_file to insert a path without having to create an RDF::Reader.
+
 ## [0.3.0][0.3.0] - 2015-12-07
 ### Changed
 - RDF::Jena::Repository now acts like a Jena DatasetGraph. This can be treated like a quad store as well as individual graphs (i.e. each_graph).
@@ -35,5 +43,6 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Supporting boolean flag on RDF::Repository to union named graphs with the default when retrieved (see `each_graph`).
 
 [RDF.rb]:   https://github.com/ruby-rdf/rdf
+[0.3.1]:    https://github.com/abargnesi/rdf-jena/compare/0.3.0...0.3.1
 [0.3.0]:    https://github.com/abargnesi/rdf-jena/compare/0.2.1...0.3.0
 [0.2.1]:    https://github.com/abargnesi/rdf-jena/compare/0.2.0...0.2.1

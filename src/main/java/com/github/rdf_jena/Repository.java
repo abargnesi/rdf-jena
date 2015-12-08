@@ -3,6 +3,7 @@ package com.github.rdf_jena;
 import org.apache.jena.graph.Node;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.NodeFactory;
+import org.apache.jena.graph.Triple;
 import org.apache.jena.query.Dataset;
 import org.apache.jena.query.ReadWrite;
 import org.apache.jena.rdf.model.RDFNode;
@@ -21,13 +22,11 @@ import org.jruby.runtime.ObjectAllocator;
 import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 
-import java.io.InputStream;
+import java.io.*;
 import java.util.Iterator;
 import java.util.Optional;
 
-import static com.github.rdf_jena.JenaConverters.convertRDFQuad;
-import static com.github.rdf_jena.JenaConverters.convertRDFResource;
-import static com.github.rdf_jena.JenaConverters.convertRDFTriple;
+import static com.github.rdf_jena.JenaConverters.*;
 import static com.github.rdf_jena.JenaRepositoryService.findClass;
 import static com.github.rdf_jena.RubyRDFConverters.convertQuad;
 import static com.github.rdf_jena.TransactionUtil.executeInTransaction;
@@ -112,23 +111,21 @@ public class Repository extends RubyObject {
     @JRubyMethod(name = {"query_pattern"}, required = 1, optional = 1)
     public IRubyObject queryPattern(ThreadContext ctx, IRubyObject[] args, Block block) {
         if (block != Block.NULL_BLOCK) {
-            IRubyObject pattern = args[0];
+            IRubyObject statements = args[0];
 
             // argument 1; unused options
 
             executeInTransaction(ds, ReadWrite.READ, ds -> {
-                Quad quadPattern = convertRDFQuad(ctx, pattern);
-                DatasetGraph dg  = ds.asDatasetGraph();
+                Node[] nodePattern = convertRDFPattern(ctx, statements);
+                DatasetGraph dg    = ds.asDatasetGraph();
                 Iterator<Quad> quads;
-                if (quadPattern == null) {
+                if (nodePattern == null) {
                     quads = dg.find();
                 } else {
-                    quads = dg.find(
-                            quadPattern.getSubject(),
-                            quadPattern.getPredicate(),
-                            quadPattern.getObject(),
-                            quadPattern.getGraph()
-                    );
+                    if (nodePattern[0] == null) {
+                        nodePattern[0] = NodeFactory.createURI("urn:x-arq:DefaultGraph");
+                    }
+                    quads = dg.find(nodePattern[0], nodePattern[1], nodePattern[2], nodePattern[3]);
                 }
                 while (quads.hasNext()) {
                     block.call(ctx, convertQuad(ctx, quads.next()));
@@ -151,8 +148,16 @@ public class Repository extends RubyObject {
         }
 
         return executeInTransaction(ds, ReadWrite.READ, ds -> {
-            Quad quad = convertRDFQuad(ctx, rdfStatement);
-            return newBoolean(ctx.runtime, ds.asDatasetGraph().contains(quad));
+            Node[] nodePattern = convertRDFPattern(ctx, rdfStatement);
+            if (nodePattern[0] == null) {
+                nodePattern[0] = NodeFactory.createURI("urn:x-arq:DefaultGraph");
+            }
+            return newBoolean(ctx.runtime, ds.asDatasetGraph().contains(
+                    nodePattern[0], //graph
+                    nodePattern[1], //subject
+                    nodePattern[2], //predicate
+                    nodePattern[3]  //object
+            ));
         });
     }
 
@@ -189,9 +194,14 @@ public class Repository extends RubyObject {
                     RubyArray array = statementEnumerator.next(ctx).convertToArray();
                     Node subject   = Optional.ofNullable(convertRDFResource(ctx, array.entry(0))).map(RDFNode::asNode).orElse(null);
                     Node predicate = Optional.ofNullable(convertRDFResource(ctx, array.entry(1))).map(RDFNode::asNode).orElse(null);
-                    Node object    = Optional.ofNullable(convertRDFResource(ctx, array.entry(2))).map(RDFNode::asNode).orElse(null);
+                    Node object    = Optional.ofNullable(convertRDFTerm(ctx, array.entry(2))).map(RDFNode::asNode).orElse(null);
                     Node graph     = Optional.ofNullable(convertRDFResource(ctx, array.entry(3))).map(RDFNode::asNode).orElse(null);
-                    dg.add(new Quad(graph, subject, predicate, object));
+
+                    if (graph == null) {
+                        dg.getDefaultGraph().add(new Triple(subject, predicate, object));
+                    } else {
+                        dg.add(new Quad(graph, subject, predicate, object));
+                    }
                 }
             } catch (RaiseException ex) {
                 // Handle StopIteration as a terminator for iterating a Ruby Enumerator.
@@ -204,6 +214,30 @@ public class Repository extends RubyObject {
                 }
             }
             return newBoolean(ctx.runtime, true);
+        });
+    }
+
+    @JRubyMethod(name = "insert_file", required = 1)
+    public IRubyObject insertFile(ThreadContext ctx, IRubyObject path) {
+        String filePath = path.asString().asJavaString();
+        File file       = new File(filePath);
+
+        if (!file.exists() || !file.canRead()) {
+            throw ctx.runtime.newArgumentError("path cannot be read");
+        }
+
+        return executeInTransaction(ds, ReadWrite.WRITE, ds -> {
+            DatasetGraph graph = ds.asDatasetGraph();
+
+            try (InputStream stream = new FileInputStream(file)) {
+                RDFDataMgr.read(graph, stream, Lang.NQUADS);
+                return newBoolean(ctx.runtime, true);
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+                throw ctx.runtime.newIOErrorFromException(e);
+            } catch (IOException e) {
+                throw ctx.runtime.newIOErrorFromException(e);
+            }
         });
     }
 

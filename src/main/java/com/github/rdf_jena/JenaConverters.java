@@ -1,5 +1,6 @@
 package com.github.rdf_jena;
 
+import org.apache.jena.graph.Node;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.rdf.model.*;
 import org.apache.jena.sparql.core.Quad;
@@ -43,6 +44,25 @@ public class JenaConverters {
                 Optional.ofNullable(predicate).map(RDFNode::asNode).orElse(null),
                 Optional.ofNullable(object).map(RDFNode::asNode).orElse(null)
         );
+    }
+
+    public static Node[] convertRDFPattern(ThreadContext ctx, IRubyObject rdfStatement) {
+        if (rdfStatement == ctx.nil || !rdfStatement.respondsTo("subject") ||
+                !rdfStatement.respondsTo("predicate") || !rdfStatement.respondsTo("object")) {
+            return null;
+        }
+
+        Resource subject   = convertRDFResource(ctx, rdfStatement.callMethod(ctx, "subject"));
+        Property predicate = convertRDFProperty(ctx, rdfStatement.callMethod(ctx, "predicate"));
+        RDFNode  object    = convertRDFTerm(ctx,     rdfStatement.callMethod(ctx, "object"));
+        Resource graphName = convertRDFResource(ctx, rdfStatement.callMethod(ctx, "graph_name"));
+
+        return new Node[] {
+                Optional.ofNullable(graphName).map(RDFNode::asNode).orElse(null),
+                Optional.ofNullable(subject).map(RDFNode::asNode).orElse(null),
+                Optional.ofNullable(predicate).map(RDFNode::asNode).orElse(null),
+                Optional.ofNullable(object).map(RDFNode::asNode).orElse(null)
+        };
     }
 
     public static Triple convertRDFTriple(ThreadContext ctx, IRubyObject rdfStatement) {
