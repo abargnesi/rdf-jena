@@ -4,6 +4,10 @@ All notable changes to rdf-jena will be documented in this file. The curated log
 
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.3.2][0.3.2] - 2015-12-10
+### Fixed
+- Fixed query / delete from default graph using RDF::Jena::Repository.
+
 ## [0.3.1][0.3.1] - 2015-12-08
 ### Fixed
 - Fixed RDF::Jena::Repository to store statements in the correct graph. If a graph_name is not provided the default graph for the Jena dataset is used.
@@ -43,6 +47,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Supporting boolean flag on RDF::Repository to union named graphs with the default when retrieved (see `each_graph`).
 
 [RDF.rb]:   https://github.com/ruby-rdf/rdf
+[0.3.2]:    https://github.com/abargnesi/rdf-jena/compare/0.3.1...0.3.2
 [0.3.1]:    https://github.com/abargnesi/rdf-jena/compare/0.3.0...0.3.1
 [0.3.0]:    https://github.com/abargnesi/rdf-jena/compare/0.2.1...0.3.0
 [0.2.1]:    https://github.com/abargnesi/rdf-jena/compare/0.2.0...0.2.1
