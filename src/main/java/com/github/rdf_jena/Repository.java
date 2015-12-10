@@ -23,6 +23,7 @@ import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 
 import java.io.*;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Optional;
 
@@ -149,6 +150,10 @@ public class Repository extends RubyObject {
 
         return executeInTransaction(ds, ReadWrite.READ, ds -> {
             Node[] nodePattern = convertRDFPattern(ctx, rdfStatement);
+            if (nodePattern == null) {
+                return newBoolean(ctx.runtime, false);
+            }
+
             if (nodePattern[0] == null) {
                 nodePattern[0] = NodeFactory.createURI("urn:x-arq:DefaultGraph");
             }
@@ -171,11 +176,21 @@ public class Repository extends RubyObject {
             Quad quad = convertRDFQuad(ctx, rdfStatement);
 
             DatasetGraph dg = ds.asDatasetGraph();
-            if (dg.contains(quad)) {
-                return newBoolean(ctx.runtime, false);
+            if (quad.getGraph() == null) {
+                Node defaultGraphNode = NodeFactory.createURI("urn:x-arq:DefaultGraph");
+                Graph defaultGraph    = dg.getGraph(defaultGraphNode);
+                Triple triple         = quad.asTriple();
+                if (defaultGraph.contains(triple)) {
+                    return newBoolean(ctx.runtime, false);
+                }
+                defaultGraph.add(quad.asTriple());
+            } else {
+                if (dg.contains(quad)) {
+                    return newBoolean(ctx.runtime, false);
+                }
+                dg.add(quad);
             }
 
-            dg.add(quad);
             return newBoolean(ctx.runtime, true);
         });
     }
@@ -198,10 +213,9 @@ public class Repository extends RubyObject {
                     Node graph     = Optional.ofNullable(convertRDFResource(ctx, array.entry(3))).map(RDFNode::asNode).orElse(null);
 
                     if (graph == null) {
-                        dg.getDefaultGraph().add(new Triple(subject, predicate, object));
-                    } else {
-                        dg.add(new Quad(graph, subject, predicate, object));
+                        graph = NodeFactory.createURI("urn:x-arq:DefaultGraph");
                     }
+                    dg.add(new Quad(graph, subject, predicate, object));
                 }
             } catch (RaiseException ex) {
                 // Handle StopIteration as a terminator for iterating a Ruby Enumerator.
@@ -259,13 +273,31 @@ public class Repository extends RubyObject {
             return ctx.nil;
         }
 
-        executeInTransaction(ds, ReadWrite.WRITE, ds -> {
+        return executeInTransaction(ds, ReadWrite.WRITE, ds -> {
             DatasetGraph dg = ds.asDatasetGraph();
-            Quad quad = convertRDFQuad(ctx, rdfStatement);
-            dg.delete(quad);
-            return null;
+            Node[] nodePattern = convertRDFPattern(ctx, rdfStatement);
+            if (nodePattern == null) {
+                return newBoolean(ctx.runtime, false);
+            }
+
+            System.out.println("Delete node pattern: " + Arrays.toString(nodePattern));
+            if (nodePattern[0] == null) {
+                Graph graph = dg.getDefaultGraph();
+                graph.remove(
+                        nodePattern[1], //subject
+                        nodePattern[2], //predicate
+                        nodePattern[3]  //object
+                );
+            } else {
+                dg.deleteAny(
+                        nodePattern[0], //graph
+                        nodePattern[1], //subject
+                        nodePattern[2], //predicate
+                        nodePattern[3]  //object
+                );
+            }
+            return newBoolean(ctx.runtime, true);
         });
-        return ctx.nil;
     }
 
     @JRubyMethod(name = "clear_statements")
