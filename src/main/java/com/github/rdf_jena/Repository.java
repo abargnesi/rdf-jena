@@ -280,7 +280,6 @@ public class Repository extends RubyObject {
                 return newBoolean(ctx.runtime, false);
             }
 
-            System.out.println("Delete node pattern: " + Arrays.toString(nodePattern));
             if (nodePattern[0] == null) {
                 Graph graph = dg.getDefaultGraph();
                 graph.remove(
