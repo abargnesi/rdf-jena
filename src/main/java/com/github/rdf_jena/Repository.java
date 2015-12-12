@@ -23,7 +23,6 @@ import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 
 import java.io.*;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Optional;
 
@@ -174,6 +173,10 @@ public class Repository extends RubyObject {
 
         return executeInTransaction(ds, ReadWrite.WRITE, ds -> {
             Quad quad = convertRDFQuad(ctx, rdfStatement);
+
+            if (quad == null) {
+                return newBoolean(ctx.runtime, false);
+            }
 
             DatasetGraph dg = ds.asDatasetGraph();
             if (quad.getGraph() == null) {
