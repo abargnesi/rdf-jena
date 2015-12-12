@@ -9,6 +9,7 @@ import org.apache.jena.query.ReadWrite;
 import org.apache.jena.rdf.model.RDFNode;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
+import org.apache.jena.riot.RDFLanguages;
 import org.apache.jena.sparql.core.DatasetGraph;
 import org.apache.jena.sparql.core.Quad;
 import org.apache.jena.sparql.graph.GraphFactory;
@@ -247,7 +248,9 @@ public class Repository extends RubyObject {
             DatasetGraph graph = ds.asDatasetGraph();
 
             try (InputStream stream = new FileInputStream(file)) {
-                RDFDataMgr.read(graph, stream, Lang.NQUADS);
+                // Map from filename's extension; fallback to NQUADS default.
+                Lang langHint = RDFLanguages.filenameToLang(file.getName(), Lang.NQUADS);
+                RDFDataMgr.read(graph, stream, langHint);
                 return newBoolean(ctx.runtime, true);
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
