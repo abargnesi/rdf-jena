@@ -35,10 +35,10 @@ Gem::Specification.new do |spec|
 
   spec.extensions              << 'ext/jruby/extconf.rb'
   spec.platform                 = 'java'
-  spec.add_runtime_dependency     'rdf',           '1.99.0'
+  spec.add_runtime_dependency     'rdf',           '1.99.1'
 
   # development gems
-  spec.add_development_dependency 'rdf-spec',      '1.99.0'
+  spec.add_development_dependency 'rdf-spec',      '1.99.1'
   spec.add_development_dependency 'rdf-vocab',     '~> 0.8.7'
   spec.add_development_dependency 'minitest',      '~> 5.7'
   spec.add_development_dependency 'rake',          '~> 10.4'

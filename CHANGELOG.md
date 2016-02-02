@@ -4,6 +4,10 @@ All notable changes to rdf-jena will be documented in this file. The curated log
 
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.3.4][0.3.4] - 2016-02-03
+### Changed
+- Upgraded [RDF.rb][RDF.rb] dependency to version 1.99.1.
+
 ## [0.3.3][0.3.3] - 2015-12-11
 ### Fixed
 - Return false if RDF statement is nil for "insert_statement" API.
@@ -52,6 +56,7 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Supporting boolean flag on RDF::Repository to union named graphs with the default when retrieved (see `each_graph`).
 
 [RDF.rb]:   https://github.com/ruby-rdf/rdf
+[0.3.4]:    https://github.com/abargnesi/rdf-jena/compare/0.3.3...0.3.4
 [0.3.3]:    https://github.com/abargnesi/rdf-jena/compare/0.3.2...0.3.3
 [0.3.2]:    https://github.com/abargnesi/rdf-jena/compare/0.3.1...0.3.2
 [0.3.1]:    https://github.com/abargnesi/rdf-jena/compare/0.3.0...0.3.1
