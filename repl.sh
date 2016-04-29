@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-. build.sh
+#. build.sh
 
 pushd "$DIR" > /dev/null
 
