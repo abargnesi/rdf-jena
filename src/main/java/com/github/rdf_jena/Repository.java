@@ -4,8 +4,8 @@ import org.apache.jena.graph.Node;
 import org.apache.jena.graph.Graph;
 import org.apache.jena.graph.NodeFactory;
 import org.apache.jena.graph.Triple;
-import org.apache.jena.query.Dataset;
-import org.apache.jena.query.ReadWrite;
+import org.apache.jena.query.*;
+import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.RDFNode;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
@@ -24,11 +24,14 @@ import org.jruby.runtime.ThreadContext;
 import org.jruby.runtime.builtin.IRubyObject;
 
 import java.io.*;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Optional;
 
 import static com.github.rdf_jena.JenaConverters.*;
 import static com.github.rdf_jena.JenaRepositoryService.findClass;
+import static com.github.rdf_jena.RubyRDFConverters.convertNode;
 import static com.github.rdf_jena.RubyRDFConverters.convertQuad;
 import static com.github.rdf_jena.TransactionUtil.executeInTransaction;
 import static org.jruby.RubyBoolean.newBoolean;
@@ -138,6 +141,37 @@ public class Repository extends RubyObject {
             IRubyObject[] enumArgs = new IRubyObject[args.length+1];
             enumArgs[0] = newSymbol(ctx.runtime, "query_pattern");
             System.arraycopy(args, 0, enumArgs, 1, args.length);
+            return callMethod(ctx, "enum_for", enumArgs);
+        }
+    }
+
+    @JRubyMethod(name = {"query_execute"}, required = 1, argTypes = {RubyString.class})
+    public IRubyObject queryExecute(ThreadContext ctx, RubyString sparqlQuery, Block block) {
+        if (block != Block.NULL_BLOCK) {
+            executeInTransaction(ds, ReadWrite.READ, ds -> {
+                Query query   = QueryFactory.create(sparqlQuery.asString().asJavaString());
+
+                Model defaultModel = ds.getDefaultModel();
+                try (QueryExecution qexec = QueryExecutionFactory.create(query, defaultModel)) {
+                    ResultSet resultSet = qexec.execSelect();
+                    while (resultSet.hasNext()) {
+                        QuerySolution solution = resultSet.next();
+                        Map<RubyString, IRubyObject> solutionVars = new HashMap<>();
+                        Iterator<String> variableIterator = solution.varNames();
+                        while (variableIterator.hasNext()) {
+                            String variable = variableIterator.next();
+                            solutionVars.put(ctx.runtime.newString(variable), convertNode(ctx, solution.get(variable)));
+                        }
+                        block.call(ctx, RubyHash.newHash(ctx.runtime, solutionVars, ctx.nil));
+                    }
+                }
+                return null;
+            });
+            return ctx.nil;
+        } else {
+            IRubyObject[] enumArgs = new IRubyObject[2];
+            enumArgs[0] = newSymbol(ctx.runtime, "query_execute");
+            enumArgs[1] = sparqlQuery;
             return callMethod(ctx, "enum_for", enumArgs);
         }
     }
