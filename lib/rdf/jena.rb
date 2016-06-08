@@ -1,7 +1,7 @@
 require          'rdf'
 
 # Loads Repository within the RDF::Jena module.
-require_relative 'jena/jars/rdf-jena-0.4.0.beta.jar'
+require_relative 'jena/jars/rdf-jena-0.4.1.jar'
 require          'com/github/rdf_jena/JenaRepository'
 
 require_relative 'jena/version'
